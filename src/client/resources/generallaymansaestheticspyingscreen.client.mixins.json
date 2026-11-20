@@ -1,0 +1,27 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "ryzlar.glass.client.mixin",
+  "plugin": "ryzlar.glass.client.mixin.GlassMixinPlugin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "AbstractContainerScreenAccessor",
+    "CameraMixin",
+    "ClientLevelMixin",
+    "CloudRendererMixin",
+    "GameRendererAccessor",
+    "GameRendererMixin",
+    "LevelRendererAccessor",
+    "LevelRendererMixin",
+    "LevelWeatherMixin",
+    "LivingEntityRendererMixin",
+    "MinecraftMixin",
+    "SectionOcclusionGraphAccessor",
+    "SkyRendererMixin",
+    "SodiumWorldRendererMixin",
+    "VanillaSectionsMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

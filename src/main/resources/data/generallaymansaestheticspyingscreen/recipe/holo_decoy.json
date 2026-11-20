@@ -1,0 +1,27 @@
+{
+  "fabric:load_conditions": [
+    {
+      "condition": "fabric:registry_contains",
+      "registry": "minecraft:item",
+      "values": [
+        "generallaymansaestheticspyingscreen:holo_decoy"
+      ]
+    }
+  ],
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    " A ",
+    "IEI",
+    " I "
+  ],
+  "key": {
+    "A": "minecraft:amethyst_shard",
+    "I": "minecraft:iron_ingot",
+    "E": "generallaymansaestheticspyingscreen:holo_emitter"
+  },
+  "result": {
+    "id": "generallaymansaestheticspyingscreen:holo_decoy",
+    "count": 1
+  }
+}
