@@ -1,0 +1,673 @@
+package ryzlar.glass.client;
+
+import net.minecraft.client.Minecraft;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.Vec3;
+import org.jetbrains.annotations.Nullable;
+import ryzlar.glass.GlassClientBridge;
+import ryzlar.glass.blockentity.GlassBaseBlockEntity;
+import ryzlar.glass.blockentity.GlassProjectorBlockEntity;
+import ryzlar.glass.blockentity.GlassSceneSelectorBlockEntity;
+import ryzlar.glass.blockentity.GlassTerminalBlockEntity;
+import ryzlar.glass.blockentity.GlassWirelessBlockEntity;
+import ryzlar.glass.client.gui.CameraScreen;
+import ryzlar.glass.client.gui.ProjectorScreen;
+import ryzlar.glass.client.gui.SceneSelectorScreen;
+import ryzlar.glass.client.gui.WirelessProjectorScreen;
+import ryzlar.glass.client.render.SpyViewRenderer;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.IdentityHashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+/**
+ * Client-side bookkeeping: which glass blocks belong to each screen, and the terminal placement (camera view) of each
+ * screen. Port of EventHandlerClient. Screens are keyed by their projector ({@link GlassProjectorBlockEntity#screenKey()}).
+ * <p>
+ * In 1.12 block entities registered themselves in onLoad / onChunkUnload / onDataPacket. Here each block entity reports
+ * its current channel every client tick ({@link #syncGlass}) and this class works out what changed.
+ */
+public final class GlassClientState implements GlassClientBridge
+{
+    public static final GlassClientState INSTANCE = new GlassClientState();
+
+    public BlockPos clickedPos = null;
+
+    /** Channel name to the active glass on it. A block can be counted twice (wireless extensions used by a projector). */
+    private final Map<String, Map<GlassBaseBlockEntity, Integer>> activeGlass = new HashMap<>();
+    public final Map<String, TerminalPlacement> terminalPlacements = new HashMap<>();
+    public final Map<String, Integer> terminalPlacementCreationTimeout = new HashMap<>();
+    /** Every projector loaded on the client, for the wireless extension screen (1.12 used world.loadedTileEntityList). */
+    public final Set<GlassProjectorBlockEntity> loadedProjectors = Collections.newSetFromMap(new IdentityHashMap<>());
+
+    /** Channels whose terminal view is drawn even before the glass asks for it, for this many more ticks. */
+    private final Map<String, Integer> prewarmTicks = new HashMap<>();
+    private static final int PREWARM_TICKS = 40;
+
+    private final Map<GlassBaseBlockEntity, Registration> glassRegistrations = new IdentityHashMap<>();
+
+    private record Registration(String channel, List<GlassWirelessBlockEntity> wireless)
+    {
+        static final Registration NONE = new Registration("", List.of());
+
+        boolean sameAs(Registration other)
+        {
+            if(!channel.equals(other.channel) || wireless.size() != other.wireless.size())
+            {
+                return false;
+            }
+            for(int i = 0; i < wireless.size(); i++)
+            {
+                if(wireless.get(i) != other.wireless.get(i))
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+    }
+
+    private GlassClientState() {}
+
+    // ---- Bridge: screens and clicks ----
+
+    @Override
+    public void openTerminalScreen(GlassTerminalBlockEntity terminal)
+    {
+        Minecraft.getInstance().setScreen(new CameraScreen(terminal));
+    }
+
+    @Override
+    public void openProjectorScreen(GlassProjectorBlockEntity projector)
+    {
+        Minecraft.getInstance().setScreen(new ProjectorScreen(projector));
+    }
+
+    @Override
+    public void openTome(@org.jetbrains.annotations.Nullable String page)
+    {
+        ryzlar.glass.client.tome.TomeClient.open(page);
+    }
+
+    @Override
+    public void openWirelessScreen(GlassWirelessBlockEntity wireless)
+    {
+        Minecraft.getInstance().setScreen(new WirelessProjectorScreen(wireless));
+    }
+
+    @Override
+    public void openSceneSelectorScreen(GlassSceneSelectorBlockEntity selector)
+    {
+        Minecraft.getInstance().setScreen(new SceneSelectorScreen(selector));
+    }
+
+    @Override
+    public void openHoloScannerScreen(ryzlar.glass.holo.HoloScannerBlockEntity scanner)
+    {
+        Minecraft.getInstance().setScreen(new ryzlar.glass.client.holo.HoloScannerScreen(scanner));
+    }
+
+    @Override
+    public void openHoloProjectorScreen(ryzlar.glass.holo.HoloProjectorBlockEntity projector)
+    {
+        Minecraft.getInstance().setScreen(new ryzlar.glass.client.holo.HoloProjectorScreen(projector));
+    }
+
+    @Override
+    public void openTabletScreen(net.minecraft.world.InteractionHand hand)
+    {
+        ryzlar.glass.client.gadget.GadgetsClient.openTablet(hand);
+    }
+
+    @Override
+    public void onGlassClicked(BlockPos pos)
+    {
+        clickedPos = pos.immutable();
+        punch(pos);
+    }
+
+    /** A punch on a screen: where it hit, and when. The ripple spreads out from there across the whole screen. */
+    public record Punch(Vec3 point, long time) {}
+
+    private final Map<String, Punch> punches = new HashMap<>();
+    private static final int PUNCH_REPEAT_TICKS = 10;
+
+    private void punch(BlockPos pos)
+    {
+        Minecraft mc = Minecraft.getInstance();
+        if(mc.level == null || !(mc.level.getBlockEntity(pos) instanceof GlassBaseBlockEntity base) || !base.active)
+        {
+            return;
+        }
+        Vec3 point = mc.hitResult instanceof BlockHitResult hit && hit.getBlockPos().equals(pos) ? hit.getLocation() : Vec3.atCenterOf(pos);
+        punches.put(base.channel, new Punch(point, mc.level.getGameTime()));
+    }
+
+    /** A ripple on a screen's front from this point (something went through it). */
+    public void addPunch(String key, Vec3 point)
+    {
+        Minecraft mc = Minecraft.getInstance();
+        if(mc.level != null)
+        {
+            punches.put(key, new Punch(point, mc.level.getGameTime()));
+        }
+    }
+
+    @Nullable
+    public Punch punchFor(String key)
+    {
+        return punches.get(key);
+    }
+
+    // ---- Bridge: block entity registration ----
+
+    @Override
+    public void syncGlass(GlassBaseBlockEntity glass)
+    {
+        if(glass instanceof GlassProjectorBlockEntity projector)
+        {
+            loadedProjectors.add(projector);
+        }
+
+        Registration wanted = wantedRegistration(glass);
+        Registration current = glassRegistrations.getOrDefault(glass, Registration.NONE);
+        if(current.sameAs(wanted))
+        {
+            return;
+        }
+        if(glass instanceof GlassProjectorBlockEntity projector && !projector.active && !current.channel.isEmpty() && wanted.channel.isEmpty())
+        {
+            startSwitchOff(current.channel, projector);
+        }
+        unregister(glass, current);
+        register(glass, wanted);
+    }
+
+    @Override
+    public void removeGlass(GlassBaseBlockEntity glass)
+    {
+        if(glass instanceof GlassProjectorBlockEntity projector)
+        {
+            loadedProjectors.remove(projector);
+        }
+        unregister(glass, glassRegistrations.getOrDefault(glass, Registration.NONE));
+    }
+
+    private static Registration wantedRegistration(GlassBaseBlockEntity glass)
+    {
+        String channel = glass.getDisplayedChannel();
+        if(channel.isEmpty())
+        {
+            return Registration.NONE;
+        }
+        List<GlassWirelessBlockEntity> wireless = List.of();
+        if(glass instanceof GlassProjectorBlockEntity projector && !projector.wirelessPos.isEmpty() && glass.getLevel() != null)
+        {
+            wireless = new ArrayList<>();
+            for(BlockPos pos : projector.wirelessPos)
+            {
+                if(glass.getLevel().isLoaded(pos) && glass.getLevel().getBlockEntity(pos) instanceof GlassWirelessBlockEntity w)
+                {
+                    wireless.add(w);
+                }
+            }
+        }
+        return new Registration(channel, wireless);
+    }
+
+    private void register(GlassBaseBlockEntity glass, Registration registration)
+    {
+        if(registration.channel.isEmpty())
+        {
+            glassRegistrations.remove(glass);
+            return;
+        }
+        glassRegistrations.put(glass, registration);
+        if(glass instanceof GlassProjectorBlockEntity)
+        {
+            cancelSwitchOff(registration.channel); //switched back on before the animation finished
+        }
+        addGlass(glass, registration.channel);
+        for(GlassWirelessBlockEntity wireless : registration.wireless)
+        {
+            wireless.users++;
+            addGlass(wireless, registration.channel);
+        }
+    }
+
+    private void unregister(GlassBaseBlockEntity glass, Registration registration)
+    {
+        glassRegistrations.remove(glass);
+        if(registration.channel.isEmpty())
+        {
+            return;
+        }
+        removeGlassFromChannel(glass, registration.channel);
+        for(GlassWirelessBlockEntity wireless : registration.wireless)
+        {
+            wireless.users--;
+            removeGlassFromChannel(wireless, registration.channel);
+        }
+    }
+
+    private void addGlass(GlassBaseBlockEntity base, String channel)
+    {
+        activeGlass.computeIfAbsent(channel, k -> new IdentityHashMap<>()).merge(base, 1, Integer::sum);
+        channelChanged(channel);
+
+        TerminalPlacement placement = terminalPlacements.get(channel);
+        if(placement != null)
+        {
+            placement.onGlassChanged();
+        }
+    }
+
+    private void removeGlassFromChannel(GlassBaseBlockEntity base, String channel)
+    {
+        Map<GlassBaseBlockEntity, Integer> bases = activeGlass.get(channel);
+        if(bases == null)
+        {
+            return;
+        }
+        bases.computeIfPresent(base, (k, count) -> count > 1 ? count - 1 : null);
+        if(bases.isEmpty())
+        {
+            activeGlass.remove(channel);
+            if(!switchOffs.containsKey(channel)) //otherwise the camera image is kept until the switch-off animation is done
+            {
+                releasePlacement(channel);
+            }
+        }
+        else
+        {
+            TerminalPlacement placement = terminalPlacements.get(channel);
+            if(placement != null)
+            {
+                placement.onGlassChanged();
+            }
+        }
+    }
+
+    /**
+     * Something on this channel changed, so a terminal placement may be possible now: drop the retry wait (1.12 waited
+     * 13 ticks, which showed as a black screen when turning on) and draw the terminal's view ahead of time for a bit,
+     * so it is ready by the time the glass shows it.
+     */
+    private void channelChanged(String channel)
+    {
+        terminalPlacementCreationTimeout.remove(channel);
+        prewarmTicks.put(channel, PREWARM_TICKS);
+    }
+
+    /** A screen switching off: its blocks, and the game time its animation is over. */
+    private record SwitchOff(List<GlassBaseBlockEntity> blocks, long until) {}
+
+    /**
+     * A screen switching feed (scene, camera or cloak) while on: the new image wipes over the old one in a wave from the
+     * projector. {@code oldCloak}: the old image is a cloak (one view per side).
+     */
+    public record Transition(long start, float radius, long until, boolean oldCloak)
+    {
+        public float waveRadius(long gameTime, float partialTick)
+        {
+            return (gameTime - start + partialTick) * GlassBaseBlockEntity.WAVE_SPEED;
+        }
+    }
+
+    private final Map<String, Transition> transitions = new HashMap<>();
+
+    @Nullable
+    public Transition transitionFor(String screen)
+    {
+        return transitions.get(screen);
+    }
+
+    /** How far the wave must travel to cover the screen (block corners and pixels spilling past the front included). */
+    private float coverRadius(String key, GlassProjectorBlockEntity master)
+    {
+        double furthest = 0D;
+        for(GlassBaseBlockEntity base : getActiveGlass(key))
+        {
+            furthest = Math.max(furthest, Math.sqrt(base.getBlockPos().distSqr(master.getBlockPos())));
+        }
+        for(BlockPos pos : master.wirelessPos)
+        {
+            furthest = Math.max(furthest, Math.sqrt(pos.distSqr(master.getBlockPos())));
+        }
+        return (float)furthest + 0.75F + 0.6F;
+    }
+
+    /** The screen's feed changed while on: keep the old image and let the new one wipe over it. */
+    private void startTransition(String key, GlassProjectorBlockEntity master, boolean oldCloak)
+    {
+        if(master.getLevel() == null)
+        {
+            return;
+        }
+        playAt(master, ryzlar.glass.GlassSounds.NANO_ASSEMBLE, 0.55F, 1.3F);
+        long now = master.getLevel().getGameTime();
+        float radius = coverRadius(key, master);
+        long until = now + (long)Math.ceil(radius / GlassBaseBlockEntity.WAVE_SPEED) + 2;
+        if(SpyViewRenderer.INSTANCE.retire(key, until))
+        {
+            transitions.put(key, new Transition(now, radius, until, oldCloak));
+        }
+        else
+        {
+            transitions.remove(key);
+            master.onStart = now; //nothing to wipe over: just play the turn-on wave
+        }
+    }
+
+    private void endTransition(String key)
+    {
+        if(transitions.remove(key) != null)
+        {
+            SpyViewRenderer.INSTANCE.releaseRetired(key);
+        }
+    }
+
+    private final Map<String, SwitchOff> switchOffs = new HashMap<>();
+
+    /**
+     * The projector of this screen was switched off: the turn-on wave in reverse. The whole screen keeps showing the
+     * camera while one wave shrinks from the outermost glass back into the projector; behind it the glass is plain again.
+     */
+    private static void playAt(GlassProjectorBlockEntity master, net.minecraft.sounds.SoundEvent sound, float volume, float pitch)
+    {
+        BlockPos pos = master.getBlockPos();
+        master.getLevel().playLocalSound(pos.getX() + 0.5D, pos.getY() + 0.5D, pos.getZ() + 0.5D, sound, net.minecraft.sounds.SoundSource.BLOCKS, volume, pitch, false);
+    }
+
+    private void startSwitchOff(String key, GlassProjectorBlockEntity master)
+    {
+        if(master.getLevel() == null)
+        {
+            return;
+        }
+        playAt(master, ryzlar.glass.GlassSounds.NANO_DISSOLVE, 0.9F, master.cloak ? 0.85F : 1F);
+        long now = master.getLevel().getGameTime();
+        List<GlassBaseBlockEntity> blocks = new ArrayList<>();
+        double furthest = 0D;
+        for(GlassBaseBlockEntity base : getActiveGlass(key))
+        {
+            if(base == master || (base.active && base.channel.equals(key)))
+            {
+                blocks.add(base);
+                furthest = Math.max(furthest, Math.sqrt(base.getBlockPos().distSqr(master.getBlockPos())));
+            }
+        }
+        if(!blocks.contains(master))
+        {
+            blocks.add(master);
+        }
+        if(master.wirelessPos.size() > 1)
+        {
+            for(BlockPos pos : master.wirelessPos)
+            {
+                furthest = Math.max(furthest, Math.sqrt(pos.distSqr(master.getBlockPos())));
+            }
+        }
+        //Start where every pixel is still showing (block corners and pixels spilling past the front included), or where
+        //the turn-on wave had got to if it is switched off before it finished.
+        float radius = (float)furthest + 0.75F + 0.6F;
+        radius = Math.min(radius, master.onRadius(0F));
+        if(master.cloakFieldBox() != null)
+        {
+            radius = Math.max(radius, 42F * GlassBaseBlockEntity.WAVE_SPEED); //the field's walls take two seconds to sink back
+        }
+        for(GlassBaseBlockEntity base : blocks)
+        {
+            base.offKey = key;
+            base.offStart = now;
+            base.offRadius = radius;
+            base.offFaces = List.copyOf(base.activeFaces);
+            base.offWireless = base instanceof GlassProjectorBlockEntity projector && !projector.wirelessPos.isEmpty();
+            base.offCloak = master.cloak;
+        }
+        endTransition(key);
+        long until = now + (long)Math.ceil(radius / GlassBaseBlockEntity.WAVE_SPEED) + 2;
+        switchOffs.put(key, new SwitchOff(blocks, until));
+        SpyViewRenderer.INSTANCE.keepAlive(key, until);
+    }
+
+    private void cancelSwitchOff(String key)
+    {
+        SwitchOff switchOff = switchOffs.remove(key);
+        if(switchOff != null)
+        {
+            for(GlassBaseBlockEntity base : switchOff.blocks())
+            {
+                base.offKey = "";
+                base.offFaces = List.of();
+            }
+        }
+    }
+
+    private void releasePlacement(String channel)
+    {
+        terminalPlacements.remove(channel);
+        terminalPlacementCreationTimeout.remove(channel);
+        SpyViewRenderer.INSTANCE.release(channel);
+    }
+
+    /**
+     * True if this block lies in the part of the world a cloak hides, and the eye is outside it: its selection outline
+     * would give the cloak away.
+     */
+    public boolean isHiddenByCloak(BlockPos pos, Vec3 eye)
+    {
+        if(!ryzlar.glass.client.render.ViewBackend.current().drawsViews())
+        {
+            return false; //cloaks are not drawn with this renderer, so nothing is hidden
+        }
+        for(TerminalPlacement placement : terminalPlacements.values())
+        {
+            if(!placement.cloak || !placement.isValid())
+            {
+                continue;
+            }
+            for(TerminalPlacement side : placement.cloakSides())
+            {
+                if(side.hides(pos) && !side.contains(eye))
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    public Set<GlassBaseBlockEntity> getActiveGlass(String channel)
+    {
+        Map<GlassBaseBlockEntity, Integer> bases = channel.isEmpty() ? null : activeGlass.get(channel);
+        return bases == null ? Set.of() : bases.keySet();
+    }
+
+    /** Called from rendering, only for active glass. Port of EventHandlerClient.getTerminalPlacement. */
+    @Nullable
+    public TerminalPlacement getTerminalPlacement(String channel)
+    {
+        //Switching off: the placement (and the camera image) must stay until the wave is back in the projector. Looking
+        //it up now would find it invalid (the projector is off) and release it, and the screen vanished at once; this
+        //happened when it was switched off within a few seconds of switching on, while the view was still being prewarmed.
+        if(switchOffs.containsKey(channel) || terminalPlacementCreationTimeout.containsKey(channel))
+        {
+            return null;
+        }
+        TerminalPlacement existing = terminalPlacements.get(channel);
+        boolean switchedCamera = false;
+        boolean oldCloak = false;
+        if(existing != null)
+        {
+            if(existing.isValid())
+            {
+                return existing;
+            }
+            if(existing.isSameScreen())
+            {
+                //Same screen, other feed (another scene, camera or cloak): the new feed wipes over the old one.
+                terminalPlacements.remove(channel);
+                switchedCamera = true;
+                oldCloak = existing.cloak;
+            }
+            else
+            {
+                releasePlacement(channel);
+            }
+        }
+
+        //Find the projector that started this screen; it knows which camera to show.
+        GlassProjectorBlockEntity master = null;
+        for(GlassBaseBlockEntity base : getActiveGlass(channel))
+        {
+            if(base.active && base.distance == 1 && base.channel.equals(channel) && base instanceof GlassProjectorBlockEntity projector && !projector.isRemoved())
+            {
+                master = projector;
+                break;
+            }
+        }
+        Minecraft mc = Minecraft.getInstance();
+        if(master != null && mc.level != null && (master.cloak || master.camValid && master.camDimension.equals(mc.level.dimension())))
+        {
+            TerminalPlacement placement = new TerminalPlacement(channel, master);
+            terminalPlacements.put(channel, placement);
+            if(switchedCamera)
+            {
+                startTransition(channel, master, oldCloak);
+            }
+            return placement;
+        }
+        if(switchedCamera)
+        {
+            //The new feed has no camera (offline, or in another dimension): no image to wipe in, so drop the old one.
+            endTransition(channel);
+            SpyViewRenderer.INSTANCE.release(channel);
+        }
+
+        terminalPlacementCreationTimeout.put(channel, 13); //13 tick wait before trying again.
+        return null;
+    }
+
+    public void clientTick(Minecraft mc)
+    {
+        if(mc.level == null)
+        {
+            //Out of the world: let go of everything. The disconnect event clears too, but on a server a last frame of the
+            //old world can be drawn after it, making views again, and they (images on the graphics card) were kept.
+            if(SpyViewRenderer.INSTANCE.viewCount() > 0 || !loadedProjectors.isEmpty())
+            {
+                clear();
+            }
+            return;
+        }
+        if(clickedPos != null)
+        {
+            if(mc.level.getBlockEntity(clickedPos) instanceof GlassBaseBlockEntity base && base.active && mc.gameMode != null && mc.gameMode.isDestroying())
+            {
+                //Keep punching: a new ripple every half second.
+                Punch last = punches.get(base.channel);
+                if(last == null || mc.level.getGameTime() - last.time() >= PUNCH_REPEAT_TICKS)
+                {
+                    punch(clickedPos);
+                }
+            }
+            else
+            {
+                clickedPos = null;
+            }
+        }
+
+        Iterator<Map.Entry<String, Integer>> ite = terminalPlacementCreationTimeout.entrySet().iterator();
+        while(ite.hasNext())
+        {
+            Map.Entry<String, Integer> e = ite.next();
+            e.setValue(e.getValue() - 1);
+            if(e.getValue() < 0)
+            {
+                ite.remove();
+            }
+        }
+
+        long now = mc.level.getGameTime();
+        Iterator<Map.Entry<String, SwitchOff>> offs = switchOffs.entrySet().iterator();
+        while(offs.hasNext())
+        {
+            Map.Entry<String, SwitchOff> e = offs.next();
+            if(now > e.getValue().until())
+            {
+                offs.remove();
+                if(!activeGlass.containsKey(e.getKey()))
+                {
+                    releasePlacement(e.getKey());
+                }
+            }
+        }
+
+        transitions.entrySet().removeIf(e -> {
+            if(now > e.getValue().until())
+            {
+                SpyViewRenderer.INSTANCE.releaseRetired(e.getKey());
+                return true;
+            }
+            return false;
+        });
+
+        Iterator<Map.Entry<String, Integer>> prewarm = prewarmTicks.entrySet().iterator();
+        while(prewarm.hasNext())
+        {
+            Map.Entry<String, Integer> e = prewarm.next();
+            e.setValue(e.getValue() - 1);
+            if(e.getValue() < 0 || !activeGlass.containsKey(e.getKey()))
+            {
+                prewarm.remove();
+                continue;
+            }
+            TerminalPlacement placement = getTerminalPlacement(e.getKey());
+            if(placement != null && !placement.cloak) //a cloak has a view per side, asked for by the glass as it is seen
+            {
+                SpyViewRenderer.INSTANCE.request(placement);
+            }
+        }
+
+        //Drop anything left over from a world we are no longer in.
+        glassRegistrations.keySet().removeIf(be -> {
+            if(be.getLevel() != mc.level)
+            {
+                Registration reg = glassRegistrations.get(be);
+                if(reg != null && !reg.channel.isEmpty())
+                {
+                    removeGlassFromChannel(be, reg.channel);
+                    for(GlassWirelessBlockEntity wireless : reg.wireless)
+                    {
+                        removeGlassFromChannel(wireless, reg.channel);
+                    }
+                }
+                return true;
+            }
+            return false;
+        });
+        loadedProjectors.removeIf(be -> be.getLevel() != mc.level);
+    }
+
+    public void clear()
+    {
+        clickedPos = null;
+        activeGlass.clear();
+        terminalPlacements.clear();
+        terminalPlacementCreationTimeout.clear();
+        prewarmTicks.clear();
+        switchOffs.clear();
+        transitions.clear();
+        punches.clear();
+        loadedProjectors.clear();
+        glassRegistrations.clear();
+        SpyViewRenderer.INSTANCE.releaseAll();
+    }
+}
