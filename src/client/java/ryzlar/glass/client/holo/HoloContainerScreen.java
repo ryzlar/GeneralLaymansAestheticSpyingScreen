@@ -18,18 +18,31 @@ public class HoloContainerScreen extends HoloScreen
     private static final int SLOT = 20;
     private static final int PAD = 12;
     private static final int HEADER = 34;
-    private static final int FOOTER = 24;
+    /** Below the grid: a gap, the note's lines, and a margin. */
+    private static final int FOOTER_GAP = 8;
+    private static final int LINE = 10;
+    private static final int FOOTER_MARGIN = 8;
+    private static final int WIDTH = PAD * 2 + COLUMNS * SLOT;
+    private static final Component NOTE = Component.translatable("glass.ui.cube.containerReadOnly");
 
     private final List<ItemStack> items;
     private final int rows;
+    /** The note under the grid, wrapped to the panel's width (it did not fit on one line). */
+    private final List<net.minecraft.util.FormattedCharSequence> note;
     private int gridLeft;
     private int gridTop;
 
     public HoloContainerScreen(Component name, List<ItemStack> items)
     {
-        super(name, PAD * 2 + COLUMNS * SLOT, HEADER + rows(items.size()) * SLOT + FOOTER);
+        this(name, items, net.minecraft.client.Minecraft.getInstance().font.split(NOTE, WIDTH - PAD * 2));
+    }
+
+    private HoloContainerScreen(Component name, List<ItemStack> items, List<net.minecraft.util.FormattedCharSequence> note)
+    {
+        super(name, WIDTH, HEADER + rows(items.size()) * SLOT + FOOTER_GAP + note.size() * LINE + FOOTER_MARGIN);
         this.items = items;
         this.rows = rows(items.size());
+        this.note = note;
     }
 
     private static int rows(int slots)
@@ -83,7 +96,11 @@ public class HoloContainerScreen extends HoloScreen
                 hovered = stack;
             }
         }
-        g.drawString(font, Component.translatable("glass.ui.cube.containerReadOnly"), left + PAD, top + panelH - 15, Holo.MUTED, false);
+        int noteTop = gridTop + rows * SLOT + FOOTER_GAP;
+        for(int i = 0; i < note.size(); i++)
+        {
+            g.drawString(font, note.get(i), left + PAD, noteTop + i * LINE, Holo.MUTED, false);
+        }
         if(!hovered.isEmpty())
         {
             g.setTooltipForNextFrame(font, hovered, mouseX, mouseY);

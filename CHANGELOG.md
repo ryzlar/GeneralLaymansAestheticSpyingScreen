@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.1.0+1.21.8
+
+Client and server both need 1.1.0: a 1.0.0 client is told to update when it joins a 1.1.0 server.
+
+### Changed
+
+- **Holo Cube at real size**: a scan is now a ball twenty-one blocks across (was fifteen), and the bubble shows it 1:1
+  instead of as a two-thirds miniature.
+- Scans made with 1.0.0 keep working: they are shown at real size too, in a bubble of their own (smaller) size.
+  Nothing has to be scanned again.
+
+### New
+
+- **Cloak fields** react when you go through them: a shockwave of glitchy static runs over the field from where you
+  crossed, and the outside ripples when someone walks through or brushes against it (other players too).
+- **Version check**: a client with another GLASS version (or none) cannot join a server, and is told which version to
+  install. A newer client on an older server is warned that holo cube simulations will not line up.
+
+### Fixed
+
+- A cloak over water no longer shows a hole down to the sea floor.
+- A scanned chest in a simulation now always opens when you right-click it, also with an empty hand or an item that
+  does something on its own.
+- The note at the bottom of a scanned chest's screen no longer runs off the panel.
+- A simulation set down in the Nether or the End now shows its scanned sky (sun, moon, stars, colour) inside the bubble.
+- GLASS now only loads on Minecraft 1.21.8 itself, instead of also on later 1.21 versions it does not support.
+
 ## 1.0.0+1.21.8 — first release of the Fabric fork
 
 The first release of GLASS for Fabric (Minecraft 1.21.8), a fork of iChun's original Forge mod for 1.12.2.

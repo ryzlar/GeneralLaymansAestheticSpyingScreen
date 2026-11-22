@@ -156,8 +156,8 @@ PAGES = {
         items=["holo_cube"],
         scene="cube_scan",
         body=[
-            "Set the cube down and right-click it: it rises, a grid grows out of it, and the ball of the world around it, fifteen "
-            "blocks across, is digitized: the blocks, what is in the chests, signs, banners and beds, frames and armor stands, "
+            "Set the cube down and right-click it: it rises, a grid grows out of it, and the ball of the world around it, "
+            "twenty-one blocks across, is digitized: the blocks, what is in the chests, signs, banners and beds, frames and armor stands, "
             "the animals and mobs, and the time and weather.",
             "Sneak + right-click (or hit it) to pick it up with its scan. Sneak + right-click in the air with it wipes the scan.",
             {"recipe": "holo_cube"},
@@ -167,8 +167,8 @@ PAGES = {
         items=["holo_cube"],
         scene="cube_bubble",
         body=[
-            "Set a scanned cube down anywhere and right-click it: a glowing bubble grows out of it with the scan inside, shrunk "
-            "to ten blocks across. From outside you see it in blue; step in and it has its real colours, under the scanned sky.",
+            "Set a scanned cube down anywhere and right-click it: a glowing bubble grows out of it with the scan inside, at its "
+            "real size. From outside you see it in blue; step in and it has its real colours, under the scanned sky.",
             "It is only a picture over the real world, which is never touched. Where the real world is empty you can stand on the "
             "scan's ground; you walk straight through the rest. Use a scanned chest to look inside it.",
             "Right-click again to switch it off.",

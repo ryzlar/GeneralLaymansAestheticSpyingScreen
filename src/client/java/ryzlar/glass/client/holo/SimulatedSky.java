@@ -2,6 +2,7 @@ package ryzlar.glass.client.holo;
 
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.Minecraft;
+import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import ryzlar.glass.holo.CubeScan;
@@ -54,6 +55,18 @@ public final class SimulatedSky
         }
     }
 
+    /**
+     * Where the sun is at this day time (0..1, 0 at noon), as an overworld's DimensionType.timeOfDay works it out. A
+     * scanned sky is always an overworld one: asked of the Nether or the End (whose time stands still), the dimension
+     * would give its own fixed time instead.
+     */
+    public static float overworldTimeOfDay(long dayTime)
+    {
+        double d = Mth.frac(dayTime / 24000.0D - 0.25D);
+        double e = 0.5D - Math.cos(d * Math.PI) / 2.0D;
+        return (float)(d * 2.0D + e) / 3.0F;
+    }
+
     /** How bright daylight was when this scan was made (0.2 at night .. 1 at noon), as ClientLevel.getSkyDarken works it out. */
     public static float scannedDaylight(CubeScan scan)
     {
@@ -62,7 +75,7 @@ public final class SimulatedSky
         {
             return 1F;
         }
-        float timeOfDay = mc.level.dimensionType().timeOfDay(scan.skyTime());
+        float timeOfDay = overworldTimeOfDay(scan.skyTime());
         float light = 1F - Math.clamp(1F - ((float)Math.cos(timeOfDay * Math.PI * 2D) * 2F + 0.2F), 0F, 1F);
         light *= 1F - scan.rain() * 5F / 16F;
         light *= 1F - scan.thunder() * 5F / 16F;
@@ -122,7 +135,7 @@ public final class SimulatedSky
         {
             return real;
         }
-        float scanned = mc.level.dimensionType().timeOfDay(sky.skyTime());
+        float scanned = overworldTimeOfDay(sky.skyTime());
         float delta = scanned - real;
         delta -= (float)Math.floor(delta + 0.5F);
         float time = real + delta * fade;
