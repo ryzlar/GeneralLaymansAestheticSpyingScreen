@@ -21,6 +21,7 @@ public class GlassClient implements ClientModInitializer
     {
         GlassClientBridge.set(GlassClientState.INSTANCE);
         GlassNetClient.init();
+        GlassVersionClient.init();
         ryzlar.glass.client.holo.HoloClient.init();
         ryzlar.glass.client.tome.TomeClient.init();
 

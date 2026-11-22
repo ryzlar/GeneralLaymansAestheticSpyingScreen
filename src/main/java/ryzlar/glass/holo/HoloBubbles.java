@@ -19,7 +19,7 @@ import java.util.Map;
 
 /**
  * The holo cube simulations running in each world, on the server and on the client. A simulation is a picture laid over
- * the real world, which stays as it is: the scanned ball, shrunk to {@link HoloSphere#SCALE}, round the cube. Only its
+ * the real world, which stays as it is: the scanned ball, at {@link HoloSphere#SCALE}, round the cube. Only its
  * ground can be stood on, and only where the real world is empty (where there is real ground, that is what counts);
  * the rest of it is walked through. The same on both sides, so movement agrees (see the collision mixin).
  * <p>
@@ -35,9 +35,9 @@ public final class HoloBubbles
 
     /**
      * A running simulation: the scan laid round {@code anchor} (the cube's block), its {@code origin} (the block the cube
-     * scanned from, in the scan's box) on the anchor's floor, shrunk to {@link HoloSphere#SCALE} and turned by
-     * {@code turn} quarter turns. {@code solid}: its ground can be stood on (while it is switched on; not while it
-     * shrinks away on the client).
+     * scanned from, in the scan's box) on the anchor's floor, at {@link HoloSphere#SCALE} and turned by {@code turn}
+     * quarter turns. {@code size}: the scan's box, each way (21 for new scans, 15 for 1.0.0's). {@code solid}: its
+     * ground can be stood on (while it is switched on; not while it shrinks away on the client).
      */
     public static final class Bubble
     {
@@ -45,6 +45,7 @@ public final class HoloBubbles
         public final BlockPos anchor;
         public final int turn;
         public final int originX, originY, originZ;
+        public final int size;
         public final ScannedBlocks blocks;
         public final boolean solid;
         private final int[] cosSin;
@@ -52,7 +53,7 @@ public final class HoloBubbles
         @Nullable
         private volatile Long2ObjectOpenHashMap<VoxelShape> ground;
 
-        public Bubble(int id, BlockPos anchor, int turn, int originX, int originY, int originZ, ScannedBlocks blocks, boolean solid)
+        public Bubble(int id, BlockPos anchor, int turn, int originX, int originY, int originZ, int size, ScannedBlocks blocks, boolean solid)
         {
             this.id = id;
             this.anchor = anchor.immutable();
@@ -60,6 +61,7 @@ public final class HoloBubbles
             this.originX = originX;
             this.originY = originY;
             this.originZ = originZ;
+            this.size = size;
             this.blocks = blocks;
             this.solid = solid;
             this.cosSin = COS_SIN[this.turn];
@@ -68,8 +70,14 @@ public final class HoloBubbles
         /** The same simulation, the same way round (what is cached for it still holds). */
         public boolean samePlace(Bubble other)
         {
-            return other.id == id && other.anchor.equals(anchor) && other.turn == turn && other.blocks == blocks
+            return other.id == id && other.anchor.equals(anchor) && other.turn == turn && other.blocks == blocks && other.size == size
                     && other.originX == originX && other.originY == originY && other.originZ == originZ;
+        }
+
+        /** True if this place in the scan's box is in it. */
+        public boolean inScan(int x, int y, int z)
+        {
+            return x >= 0 && y >= 0 && z >= 0 && x < size && y < size && z < size;
         }
 
         /** A point of the scan's box (in blocks) in the world. */
@@ -108,10 +116,10 @@ public final class HoloBubbles
             return y < originY || HoloSphere.isNaturalGround(state);
         }
 
-        /** The world box round the shrunk ball (with a block to spare). */
+        /** The world box round the ball (with a block to spare). */
         public AABB box()
         {
-            double r = (HoloSphere.SCAN_RADIUS + 1.5D) * HoloSphere.SCALE + 1D;
+            double r = (HoloSphere.radiusOf(size) + 1.5D) * HoloSphere.SCALE + 1D;
             Vec3 centre = toWorld(originX + 0.5D, originY + 0.5D, originZ + 0.5D);
             return new AABB(centre, centre).inflate(r);
         }
@@ -129,11 +137,10 @@ public final class HoloBubbles
             return map.get(pos.asLong());
         }
 
-        /** Each ground block of the scan, shrunk and placed, cut up into the world blocks it covers. */
+        /** Each ground block of the scan, placed (and scaled), cut up into the world blocks it covers. */
         private Long2ObjectOpenHashMap<VoxelShape> buildGround()
         {
             Map<Long, List<AABB>> parts = new java.util.HashMap<>();
-            int size = HoloSphere.SIZE;
             for(int y = 0; y < size; y++)
             {
                 for(int z = 0; z < size; z++)

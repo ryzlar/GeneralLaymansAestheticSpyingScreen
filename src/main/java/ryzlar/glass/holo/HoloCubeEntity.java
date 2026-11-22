@@ -37,7 +37,7 @@ import java.util.UUID;
  * {@link HoloSphere}): it rises, a holo grid grows out of it, and everything inside falls apart into glowing pixels and
  * comes back together (see the client's ScanEffect); then the ball is stored in the cube: every block, what is in the
  * chests and on the signs, the animals and mobs, and the sky. With a scan, right-click it and a glowing bubble grows out
- * of it with the scan inside, shrunk to two thirds: the block it scanned from is on the cube's own block, turned the way
+ * of it with the scan inside, at its real size: the block it scanned from is on the cube's own block, turned the way
  * the player who set it down was facing. The scan is a picture over the real world, which stays as it is; its ground can
  * be stood on where the real world is empty, the rest walked through (see {@link HoloBubbles}). Right-click again to
  * switch it off; sneak + right-click (or hit it) to pick it up, scan and all.
@@ -149,14 +149,26 @@ public class HoloCubeEntity extends Entity
         return scan != null && scan.isCurrent() ? scan : null;
     }
 
-    /** How far the bubble reaches when it has grown all the way: its wall, and a little past it. */
-    public static final float FULL_RADIUS = HoloSphere.BUBBLE_RADIUS + 0.5F;
+    /**
+     * How far the bubble reaches when it has grown all the way: its wall, and a little past it. Its size goes with the
+     * scan in the cube (1.0.0's scans are smaller than new ones).
+     */
+    public float fullRadius()
+    {
+        CubeScan scan = scan();
+        return fullRadius(scan);
+    }
+
+    public static float fullRadius(@Nullable CubeScan scan)
+    {
+        return (scan == null ? HoloSphere.BUBBLE_RADIUS : HoloSphere.bubbleRadius(scan)) + 0.5F;
+    }
 
     /** Client: how far the wave has spread now (growing while on, shrinking back after it went off; 0 when done). */
     public float waveRadius(float partialTick)
     {
         long now = level().getGameTime();
-        float full = FULL_RADIUS;
+        float full = fullRadius();
         if(projecting())
         {
             return Math.min(full, (now - clientOnStart + partialTick) * WAVE_SPEED);
@@ -195,7 +207,7 @@ public class HoloCubeEntity extends Entity
             }
             else
             {
-                clientOffRadius = Math.min(FULL_RADIUS, (now - clientOnStart) * WAVE_SPEED);
+                clientOffRadius = Math.min(fullRadius(), (now - clientOnStart) * WAVE_SPEED);
                 clientOffStart = now;
             }
         }
@@ -273,7 +285,8 @@ public class HoloCubeEntity extends Entity
             }
         }
         HoloBubbles.Bubble old = HoloBubbles.byId(level(), getId());
-        HoloBubbles.Bubble bubble = new HoloBubbles.Bubble(getId(), anchor(), turn(), scan.originX(), scan.originY(), scan.originZ(), bubbleBlocks, on);
+        HoloBubbles.Bubble bubble = new HoloBubbles.Bubble(getId(), anchor(), turn(), scan.originX(), scan.originY(), scan.originZ(), scan.sizeX(),
+                bubbleBlocks, on);
         if(old != null && old.solid == on && old.samePlace(bubble))
         {
             return;
