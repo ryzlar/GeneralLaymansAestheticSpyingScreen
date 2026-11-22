@@ -38,10 +38,10 @@ holograms, and walk into a scanned memory of a spot. Everything is explained in 
   **Holo Emitters** around it light up its sides.
 
 ### Holo Cube
-- Set the cube down and it **digitizes** the ball of the world around it, fifteen blocks across: the blocks, what is in
-  the chests, signs and banners, frames and armor stands, the animals and mobs, and even the time and weather.
-- Set it down anywhere else and a glowing **bubble** grows out of it with the scan inside, as a walk-in miniature
-  under the scanned sky. Stand on its ground, walk through the rest, look into its chests. The real world is never
+- Set the cube down and it **digitizes** the ball of the world around it, twenty-one blocks across: the blocks, what is
+  in the chests, signs and banners, frames and armor stands, the animals and mobs, and even the time and weather.
+- Set it down anywhere else and a glowing **bubble** grows out of it with the scan inside, at its real size, under the
+  scanned sky. Stand on its ground, walk through the rest, look into its chests. The real world is never
   touched.
 
 ### GLASS Tome

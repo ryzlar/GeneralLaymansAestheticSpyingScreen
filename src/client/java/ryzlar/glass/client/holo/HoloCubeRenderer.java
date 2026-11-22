@@ -49,7 +49,7 @@ public class HoloCubeRenderer extends EntityRenderer<HoloCubeEntity, HoloCubeRen
     private static final float HOVER_TICKS = 20F;
     /** Where the wave starts, from the cube's block corner: the cube itself, floating above the floor. */
     private static final Vec3 WAVE_ORIGIN = new Vec3(0.5D, 0.55D, 0.5D);
-    /** The bubble's centre, from the cube's block corner: the shrunk ball's centre (the scan stands on the cube's floor). */
+    /** The bubble's centre, from the cube's block corner: the ball's centre (the scan stands on the cube's floor). */
     private static final Vec3 CENTRE = new Vec3(0.5D, 0.5D * HoloSphere.SCALE, 0.5D);
     /** The scanned ball's centre in the real world, from the cube's block corner (the cube's block centre). */
     private static final Vec3 SCAN_CENTRE = new Vec3(0.5D, 0.5D, 0.5D);
@@ -215,12 +215,22 @@ public class HoloCubeRenderer extends EntityRenderer<HoloCubeEntity, HoloCubeRen
             return;
         }
         HologramRenderer.Hologram hologram = hologram(level, state, projection);
-        float grown = Math.clamp(state.radius / HoloCubeEntity.FULL_RADIUS, 0F, 1F);
+        //The bubble's size goes with the scan (1.0.0's scans are smaller than new ones).
+        float bubbleRadius = HoloSphere.bubbleRadius(state.scan);
+        float grown = Math.clamp(state.radius / HoloCubeEntity.fullRadius(state.scan), 0F, 1F);
         Vec3 centre = Vec3.atLowerCornerOf(state.anchor).add(CENTRE);
         //The scanned sky comes and goes with the bubble.
-        SimulatedSky.offer(state.entityId, centre, HoloSphere.BUBBLE_RADIUS, grown, state.scan, (long)state.time);
+        SimulatedSky.offer(state.entityId, centre, bubbleRadius, grown, state.scan, (long)state.time);
         Vec3 eye = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
-        boolean inside = eye.distanceTo(centre) < HoloSphere.BUBBLE_RADIUS;
+        boolean inside = eye.distanceTo(centre) < bubbleRadius;
+        //Where this dimension has no sky to turn to the scanned one (the Nether, the End), the scanned sky is drawn on
+        //the inside of the bubble, just outside its wall, fading in over the last block and a half as you walk in.
+        if(inside && SkyDome.needed(level, state.scan))
+        {
+            float wall = Math.min(state.radius - 0.3F, bubbleRadius);
+            float fade = Math.clamp((bubbleRadius - (float)eye.distanceTo(centre)) / 1.5F, 0F, 1F) * grown;
+            SkyDome.draw(poseStack.last(), buffers, new Vec3(state.x, state.y, state.z), centre, wall + 0.05F, eye, state.scan, fade);
+        }
 
         poseStack.pushPose();
         poseStack.translate(state.anchor.getX() - state.x, state.anchor.getY() - state.y, state.anchor.getZ() - state.z);
@@ -233,7 +243,7 @@ public class HoloCubeRenderer extends EntityRenderer<HoloCubeEntity, HoloCubeRen
 
         poseStack.pushPose();
         poseStack.translate(state.anchor.getX() - state.x, state.anchor.getY() - state.y, state.anchor.getZ() - state.z);
-        drawWall(state, poseStack.last(), buffers, Math.min(state.radius - 0.3F, HoloSphere.BUBBLE_RADIUS), grown, inside);
+        drawWall(state, poseStack.last(), buffers, Math.min(state.radius - 0.3F, bubbleRadius), grown, inside);
         poseStack.popPose();
     }
 
@@ -543,7 +553,7 @@ public class HoloCubeRenderer extends EntityRenderer<HoloCubeEntity, HoloCubeRen
             HologramRenderer.Placement placement = new HologramRenderer.Placement(scan.originX() + 0.5F, scan.originY(), scan.originZ() + 0.5F, state.turn,
                     HoloSphere.SCALE, new Vec3(0.5D, 0D, 0.5D));
             HologramRenderer.Hologram hologram = HologramRenderer.buildMesh(level, projection, placement, null, WAVE_ORIGIN, state.anchor, true,
-                    HoloSphere.SCAN_RADIUS + 0.5F, SimulatedSky.scannedDaylight(scan));
+                    HoloSphere.radiusOf(scan) + 0.5F, SimulatedSky.scannedDaylight(scan));
             entry = new Entry(key, hologram);
             holograms.put(state.entityId, entry);
         }

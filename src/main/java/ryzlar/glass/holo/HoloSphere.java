@@ -12,29 +12,61 @@ import net.minecraft.world.level.block.state.BlockState;
 
 /**
  * The shape of a holo cube's scan and simulation: a ball of blocks round the cube's block. The scan takes every block
- * whose centre is within {@link #SCAN_RADIUS} of the cube's block centre (ground and all), fifteen blocks across; the
- * simulation shows it shrunk to {@link #SCALE}, ten blocks across, in a bubble of {@link #BUBBLE_RADIUS}, its glowing
- * wall just round it.
+ * whose centre is within {@link #SCAN_RADIUS} of the cube's block centre (ground and all), twenty-one blocks across; the
+ * simulation shows it at its real size ({@link #SCALE}) in a bubble whose glowing wall is just round it.
+ * <p>
+ * Scans made by 1.0.0 are fifteen blocks across (radius 7). They are still shown, at their own size: everything that
+ * depends on how big a scan is takes it from the scan ({@link #radiusOf}), not from {@link #SCAN_RADIUS}.
  */
 public final class HoloSphere
 {
-    /** How far the scan reaches from the cube's block, in blocks (a ball fifteen blocks across). */
-    public static final int SCAN_RADIUS = 7;
-    /** A block is in the ball if its centre is this close (squared) to the cube's block centre: a little rounder than 7². */
-    private static final int SCAN_RADIUS_SQ = 52;
+    /** How far a new scan reaches from the cube's block, in blocks (a ball twenty-one blocks across). */
+    public static final int SCAN_RADIUS = 10;
     /** The scan's box, each way: the ball fits in it with the cube's block in the middle. */
     public static final int SIZE = SCAN_RADIUS * 2 + 1;
-    /** The simulation shows the scan this size: fifteen blocks across become ten. */
-    public static final float SCALE = 10F / 15F;
-    /** The simulation's bubble: its wall, half a block round the shrunk ball. */
-    public static final float BUBBLE_RADIUS = (SCAN_RADIUS + 0.5F) * SCALE + 0.5F;
+    /** The simulation shows the scan at its real size. */
+    public static final float SCALE = 1F;
+    /** The bubble of a new scan: its wall, half a block round the ball. */
+    public static final float BUBBLE_RADIUS = bubbleRadius(SCAN_RADIUS);
 
     private HoloSphere() {}
 
-    /** True if a block this far from the cube's block (in whole blocks each way) is in the scanned ball. */
+    /** How far a scan of this box size (blocks each way) reaches from its middle: 7 for 1.0.0's scans, 10 for new ones. */
+    public static int radiusOf(int size)
+    {
+        return Math.max(0, (size - 1) / 2);
+    }
+
+    public static int radiusOf(CubeScan scan)
+    {
+        return radiusOf(scan.sizeX());
+    }
+
+    /** A simulation's bubble round a scan of this radius: its wall, half a block round the ball. */
+    public static float bubbleRadius(int scanRadius)
+    {
+        return (scanRadius + 0.5F) * SCALE + 0.5F;
+    }
+
+    public static float bubbleRadius(CubeScan scan)
+    {
+        return bubbleRadius(radiusOf(scan));
+    }
+
+    /** True if a block this far from the cube's block (in whole blocks each way) is in a new scan's ball. */
     public static boolean inBall(int dx, int dy, int dz)
     {
-        return dx * dx + dy * dy + dz * dz <= SCAN_RADIUS_SQ;
+        return inBall(dx, dy, dz, SCAN_RADIUS);
+    }
+
+    /**
+     * True if a block this far from the middle is in a ball of this radius: its centre within the radius and a fifth
+     * of a block (a little rounder than the bare radius, so no single blocks stick out of the sides).
+     */
+    public static boolean inBall(int dx, int dy, int dz, int radius)
+    {
+        float reach = radius + 0.2F;
+        return dx * dx + dy * dy + dz * dz <= Math.round(reach * reach);
     }
 
     public static boolean inBall(BlockPos centre, BlockPos pos)

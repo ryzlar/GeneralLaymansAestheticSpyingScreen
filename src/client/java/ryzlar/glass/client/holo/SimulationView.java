@@ -1,8 +1,6 @@
 package ryzlar.glass.client.holo;
 
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.event.player.UseBlockCallback;
-import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
@@ -12,8 +10,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.Container;
-import net.minecraft.world.InteractionHand;
-import net.minecraft.world.InteractionResult;
 import net.minecraft.world.Nameable;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntitySpawnReason;
@@ -38,7 +34,6 @@ import ryzlar.glass.holo.CubeScan;
 import ryzlar.glass.holo.HoloBubbles;
 import ryzlar.glass.holo.HoloCubeEntity;
 import ryzlar.glass.holo.HoloProjectionData;
-import ryzlar.glass.holo.HoloSphere;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -57,11 +52,24 @@ public final class SimulationView
     public static void init()
     {
         ClientTickEvents.END_CLIENT_TICK.register(SimulationView::splashes);
-        //Using a scanned chest (nearer than whatever real block is aimed at) looks into it; the real world is left alone.
-        UseBlockCallback.EVENT.register((player, level, hand, hit) -> level.isClientSide && hand == InteractionHand.MAIN_HAND
-                && openAimed(player, hit.getLocation().distanceTo(player.getEyePosition())) ? InteractionResult.FAIL : InteractionResult.PASS);
-        UseItemCallback.EVENT.register((player, level, hand) -> level.isClientSide && hand == InteractionHand.MAIN_HAND
-                && openAimed(player, Double.MAX_VALUE) ? InteractionResult.FAIL : InteractionResult.PASS);
+        //Using a scanned chest: see useAimed, called from the start of Minecraft's right-click (MinecraftMixin).
+    }
+
+    /**
+     * Right-click: if the player aims at a scanned chest (nearer than whatever real block or entity is aimed at), opens
+     * its read-only view and returns true, so the click does nothing else; the real world is left alone. False: the
+     * click goes on as usual.
+     */
+    public static boolean useAimed()
+    {
+        Minecraft mc = Minecraft.getInstance();
+        if(mc.player == null || mc.level == null || mc.player.isSpectator() || HoloBubbles.in(mc.level).length == 0)
+        {
+            return false;
+        }
+        HitResult real = mc.hitResult;
+        double realDistance = real == null || real.getType() == HitResult.Type.MISS ? Double.MAX_VALUE : real.getLocation().distanceTo(mc.player.getEyePosition());
+        return openAimed(mc.player, realDistance);
     }
 
     public static void reset()
@@ -336,7 +344,7 @@ public final class SimulationView
                             double z = box.minZ + box.getZsize() * k / SAMPLES;
                             Vec3 at = bubble.toScan(x, y, z);
                             int sx = (int)Math.floor(at.x), sy = (int)Math.floor(at.y), sz = (int)Math.floor(at.z);
-                            if(sx < 0 || sy < 0 || sz < 0 || sx >= HoloSphere.SIZE || sy >= HoloSphere.SIZE || sz >= HoloSphere.SIZE)
+                            if(!bubble.inScan(sx, sy, sz))
                             {
                                 continue;
                             }

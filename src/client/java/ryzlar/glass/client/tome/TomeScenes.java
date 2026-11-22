@@ -660,12 +660,12 @@ public final class TomeScenes
         {
             return t < 1F ? "Set the holo cube down and right-click it"
                     : t < 2F ? "It rises"
-                    : t < 5.5F ? "The ball round it, fifteen blocks across, is digitized"
+                    : t < 5.5F ? "The ball round it, twenty-one blocks across, is digitized"
                     : "Blocks, chests, mobs, time and weather: all stored in the cube";
         }
     }
 
-    /** A scanned cube set down elsewhere: its bubble grows, the scan inside as a miniature. */
+    /** A scanned cube set down elsewhere: its bubble grows, the scan inside at its real size. */
     private static final class CubeBubbleScene implements Scene
     {
         @Override
@@ -694,16 +694,15 @@ public final class TomeScenes
             float grow = step(t, 1F, 2.2F) * (1F - step(t, 7.3F, 1.2F));
             if(grow > 0F)
             {
-                d.sphere(4.5F, 0.5F, 4.5F, grow * 3.4F, cyan(0.8F));
+                d.sphere(4.5F, 0.5F, 4.5F, grow * 3.9F, cyan(0.8F));
                 if(grow > 0.6F)
                 {
-                    place(d, 4.5F, 4.5F, 2F / 3F, true);
+                    place(d, 4.5F, 4.5F, 1F, true);
                     for(int x = -2; x <= 2; x++)
                     {
                         for(int z = -2; z <= 2; z++)
                         {
-                            d.faceY(4.5F + (x - 0.5F) * 2F / 3F, 4.5F + (z - 0.5F) * 2F / 3F, 4.5F + (x + 0.5F) * 2F / 3F,
-                                    4.5F + (z + 0.5F) * 2F / 3F, 0.01F, cyan(0.25F), true);
+                            d.faceY(4.5F + x - 0.5F, 4.5F + z - 0.5F, 4.5F + x + 0.5F, 4.5F + z + 0.5F, 0.01F, cyan(0.25F), true);
                         }
                     }
                 }
@@ -715,7 +714,7 @@ public final class TomeScenes
         {
             return t < 1F ? "A scanned cube, set down somewhere else"
                     : t < 3.2F ? "Right-click it: a bubble grows out of it"
-                    : t < 7.3F ? "Inside, the scan as a miniature: stand on its ground, walk through the rest"
+                    : t < 7.3F ? "Inside, the scan at its real size: stand on its ground, walk through the rest"
                     : "Right-click again: it shrinks away. The real world was never touched";
         }
     }
