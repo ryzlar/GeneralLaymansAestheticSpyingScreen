@@ -118,6 +118,8 @@ public final class SpyViewRenderer
     public static final String OLD_SUFFIX = "#old";
     /** Frames a view is kept after the glass stops asking for it. */
     private static final int RELEASE_AFTER_FRAMES = 200;
+    /** An image older than this (frames) is not shown (see {@link #isFresh}): a far cloak's comes every 8 frames. */
+    private static final int FRESH_FRAMES = 10;
 
     private final Map<String, SpyView> views = new HashMap<>();
 
@@ -190,6 +192,13 @@ public final class SpyViewRenderer
         /** Frame this was planned to be drawn cropped (see {@link #plan}). */
         long plannedFrame = -1;
         final float[] wantedRect = new float[4];
+        /**
+         * The part of a cloak field this side's image was used for this frame (some pieces of its walls), and the frame
+         * that was: planned from instead of the whole field, so it is drawn only where it shows. See {@link #wantRegion}.
+         */
+        @Nullable
+        AABB region;
+        long regionFrame = -1;
 
         boolean isSteadyCloak(long frame, boolean switchingOff)
         {
@@ -346,6 +355,38 @@ public final class SpyViewRenderer
         return GlassRenderTypes.cloakScreen(view.textureId, view::sampleMatrix, cull);
     }
 
+    /**
+     * A cloak side shows only on part of its glass this frame (see GlassBlockEntityRenderer.drawField): it is drawn
+     * next frame only where that part is on screen. Every part asked for in one frame counts.
+     */
+    public void wantRegion(String channel, AABB part)
+    {
+        SpyView view = views.get(channel);
+        if(view == null)
+        {
+            return;
+        }
+        if(view.regionFrame != frame || view.region == null)
+        {
+            view.region = part;
+            view.regionFrame = frame;
+        }
+        else
+        {
+            view.region = view.region.minmax(part);
+        }
+    }
+
+    /**
+     * True if this view's last image is recent enough to show (at most a few frames old, as a far cloak's image may
+     * be). One not drawn for longer was made from somewhere else entirely: shown, it smears across the glass.
+     */
+    public boolean isFresh(String channel)
+    {
+        SpyView view = views.get(channel);
+        return view != null && view.rendered && frame - view.drawnFrame <= FRESH_FRAMES;
+    }
+
     /** The last image drawn for this screen, without asking for a new one (for the switch-off animation). */
     @Nullable
     public ResourceLocation textureFor(String channel)
@@ -441,7 +482,7 @@ public final class SpyViewRenderer
     private static boolean plan(SpyView view, long frame, Vec3 eye, Matrix4f mainViewProjection)
     {
         float[] tight = new float[4];
-        AABB box = view.placement.screenBox();
+        AABB box = view.regionFrame >= frame - 1 && view.region != null ? view.region : view.placement.screenBox();
         if(box == null || !screenRect(box, eye, mainViewProjection, tight))
         {
             return false; //no glass yet, or none of it on screen: nothing to show

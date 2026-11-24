@@ -17,6 +17,7 @@ import ryzlar.glass.client.sound.GlassAmbienceSound;
 
 import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -64,6 +65,9 @@ public class TerminalPlacement
     private AABB hidden = new AABB(0, 0, 0, 0, 0, 0);
     /** Cloak: the placement of each side of the screen, made when first needed. */
     private final Map<Direction, TerminalPlacement> faces = new EnumMap<>(Direction.class);
+    /** Cloak: the sides the screen's glass faces (its blocks' active faces), worked out when first needed. */
+    @org.jetbrains.annotations.Nullable
+    private Set<Direction> screenSides;
 
     public TerminalPlacement(String channel, GlassProjectorBlockEntity master)
     {
@@ -216,6 +220,7 @@ public class TerminalPlacement
         if(cloak)
         {
             //The screen changed shape, so the hidden part of the world did too.
+            screenSides = null;
             for(Map.Entry<Direction, TerminalPlacement> e : faces.entrySet())
             {
                 e.getValue().placeCloakPlane(e.getKey());
@@ -243,6 +248,25 @@ public class TerminalPlacement
             }
         }
         cullRender = cull;
+    }
+
+    /** Cloak: the sides the screen's glass faces, e.g. all four for a ring of walls. */
+    public Set<Direction> screenSides()
+    {
+        if(screenSides == null)
+        {
+            Set<Direction> sides = EnumSet.noneOf(Direction.class);
+            for(GlassBaseBlockEntity base : activeBlocks())
+            {
+                sides.addAll(base.activeFaces);
+            }
+            if(sides.isEmpty())
+            {
+                return sides; //no glass registered yet: look again next time
+            }
+            screenSides = sides;
+        }
+        return screenSides;
     }
 
     /** Cloak: the sides made so far (one per side seen). */

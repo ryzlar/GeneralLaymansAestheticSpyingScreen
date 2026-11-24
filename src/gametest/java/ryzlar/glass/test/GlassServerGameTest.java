@@ -156,6 +156,83 @@ public class GlassServerGameTest
         helper.succeedWhen(() -> helper.assertTrue(zombie.getTarget() == decoy, Component.literal("the zombie is not after the decoy")));
     }
 
+    /**
+     * A cloaked ring of walls (glass around a farm) switches off once, block by block: no block that has gone off is
+     * switched back on by a neighbour that has not heard yet. That relit glass flashed white on the client.
+     */
+    @GameTest(maxTicks = 200)
+    public void cloakRingSwitchesOffCleanly(GameTestHelper helper)
+    {
+        List<BlockPos> ring = new java.util.ArrayList<>();
+        for(int y = 1; y <= 2; y++)
+        {
+            for(int x = 1; x <= 7; x++)
+            {
+                for(int z = 1; z <= 6; z++)
+                {
+                    if(x == 1 || x == 7 || z == 1 || z == 6)
+                    {
+                        ring.add(new BlockPos(x, y, z));
+                    }
+                }
+            }
+        }
+        BlockPos projectorPos = new BlockPos(4, 1, 1);
+        for(BlockPos pos : ring)
+        {
+            helper.setBlock(pos, pos.equals(projectorPos) ? GlassRegistry.GLASS_PROJECTOR : GlassRegistry.GLASS_EXTENSION);
+        }
+        GlassProjectorBlockEntity projector = (GlassProjectorBlockEntity)helper.getLevel().getBlockEntity(helper.absolutePos(projectorPos));
+        helper.assertTrue(projector != null, Component.literal("no projector block entity"));
+        projector.placingFace = net.minecraft.core.Direction.NORTH;
+        projector.cloak = true;
+        helper.runAtTickTime(1, () -> projector.changeRedstoneState(true));
+
+        java.util.Set<BlockPos> wentOff = new java.util.HashSet<>();
+        boolean[] off = { false };
+        helper.runAtTickTime(80, () ->
+        {
+            for(BlockPos pos : ring)
+            {
+                helper.assertTrue(glass(helper, pos).active, Component.literal("the ring is not all on: " + pos));
+            }
+            projector.changeRedstoneState(false);
+            off[0] = true;
+        });
+        helper.onEachTick(() ->
+        {
+            if(!off[0])
+            {
+                return;
+            }
+            for(BlockPos pos : ring)
+            {
+                boolean active = glass(helper, pos).active;
+                if(!active)
+                {
+                    wentOff.add(pos);
+                }
+                else if(wentOff.contains(pos))
+                {
+                    helper.fail(Component.literal("glass at " + pos + " went off and came back on"));
+                }
+            }
+        });
+        helper.runAtTickTime(180, () ->
+        {
+            for(BlockPos pos : ring)
+            {
+                helper.assertTrue(!glass(helper, pos).active, Component.literal("glass at " + pos + " is still on"));
+            }
+            helper.succeed();
+        });
+    }
+
+    private static ryzlar.glass.blockentity.GlassBaseBlockEntity glass(GameTestHelper helper, BlockPos pos)
+    {
+        return (ryzlar.glass.blockentity.GlassBaseBlockEntity)helper.getLevel().getBlockEntity(helper.absolutePos(pos));
+    }
+
     /** Four wireless extensions in a rectangle are the corners of a cloak field. */
     @GameTest
     public void fourCornersMakeAField(GameTestHelper helper)

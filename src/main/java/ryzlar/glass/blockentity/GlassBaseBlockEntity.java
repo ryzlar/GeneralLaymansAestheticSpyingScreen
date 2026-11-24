@@ -66,6 +66,8 @@ public class GlassBaseBlockEntity extends BlockEntity
     public int fadePropagate;
     public int fadeDistance;
     public int lastDraw;
+    /** Client: this glass was last shown as part of a cloak (which never shows the white flash: it would give it away). */
+    public boolean shownCloak;
 
     /**
      * Client: the screen appears and disappears as one wave across the whole screen, centred on the projector. It grows
