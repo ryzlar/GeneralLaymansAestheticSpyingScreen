@@ -228,6 +228,12 @@ public class GlassBlockEntityRenderer implements BlockEntityRenderer<GlassBaseBl
             cloak = placement.cloak;
         }
         te.shownCloak = cloak;
+        if(cloak && !ViewBackend.current().drawsViews())
+        {
+            //With a shader pack a cloak has no views: it hides its blocks (CloakHider), which is its animation too. Asking
+            //for views anyway only made views that are never drawn, nor let go.
+            return;
+        }
         //Switching feed: the old images, which the new feed wipes over.
         GlassClientState.Transition transition = switchingOff ? null : GlassClientState.INSTANCE.transitionFor(key);
 

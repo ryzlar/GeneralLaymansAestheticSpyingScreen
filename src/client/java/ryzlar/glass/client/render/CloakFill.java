@@ -316,7 +316,7 @@ public final class CloakFill
         }
         //A block changing here changes the made-up ground (it is worked out from the columns round the hidden part).
         AABB looked = new AABB(minX - SAMPLE - 2, minY - SCAN, minZ - SAMPLE - 2, maxX + SAMPLE + 3, maxY + Terrain.SKY_SCAN + 2, maxZ + SAMPLE + 3);
-        return new CloakHider.Hidden(minX, minY, minZ, sizeX, sizeY, sizeZ, states, sky, block, hidden, looked);
+        return new CloakHider.Hidden(minX, minY, minZ, sizeX, sizeY, sizeZ, states, sky, block, hidden, looked, null, null, Float.MAX_VALUE, true);
     }
 
     /** Made-up ground for the hidden columns, carried on from the natural ground around them. */
