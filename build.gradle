@@ -70,6 +70,11 @@ dependencies {
 	}
 	if(project.hasProperty("withIris")) {
 		modLocalRuntime "maven.modrinth:iris:${project.iris_version}"
+		// Iris bundles these inside its jar, which a dev run does not load: without them picking a shader pack crashes
+		// (NoClassDefFoundError: org/anarres/cpp/PreprocessorListener). Keep them in step with the Iris version.
+		localRuntime "org.anarres:jcpp:1.4.14"
+		localRuntime "io.github.douira:glsl-transformer:3.0.0-pre3"
+		localRuntime "org.antlr:antlr4-runtime:4.13.1"
 	}
 }
 
