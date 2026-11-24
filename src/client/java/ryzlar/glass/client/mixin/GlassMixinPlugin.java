@@ -19,7 +19,7 @@ public class GlassMixinPlugin implements IMixinConfigPlugin
     /** Mixins only for vanilla's chunk rendering. */
     private static final Set<String> VANILLA_ONLY = Set.of("VanillaSectionsMixin", "LevelRendererAccessor", "SectionOcclusionGraphAccessor");
     /** Mixins into Sodium itself (the Sodium view backend), only with a Sodium version they were made for. */
-    private static final Set<String> SODIUM_ONLY = Set.of("SodiumWorldRendererMixin");
+    private static final Set<String> SODIUM_ONLY = Set.of("SodiumWorldRendererMixin", "LevelSliceMixin");
 
     @Override
     public void onLoad(String mixinPackage)

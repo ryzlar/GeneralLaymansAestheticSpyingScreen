@@ -53,6 +53,13 @@ public class GlassBlockEntityRenderer implements BlockEntityRenderer<GlassBaseBl
     @Override
     public void render(GlassBaseBlockEntity te, float partialTick, PoseStack poseStack, MultiBufferSource buffers, int light, int overlay, Vec3 cameraPos)
     {
+        BlockPos at = te.getBlockPos();
+        if(CloakHider.hidesAnything() && CloakHider.state(at.getX(), at.getY(), at.getZ()) != null)
+        {
+            //Hidden by a cloak (its own glass, a projector in it): drawn as nothing at all. The game draws this renderer
+            //even off screen, from a list of its own, so the chunk builder not seeing it does not stop it.
+            return;
+        }
         poseStack.pushPose();
         poseStack.translate(0.5D, 0.5D, 0.5D);
 
@@ -188,6 +195,13 @@ public class GlassBlockEntityRenderer implements BlockEntityRenderer<GlassBaseBl
             {
                 whiteFlash(te, poseStack, buffers, partialTick);
             }
+            return;
+        }
+
+        //A cloak that hides its blocks from the world drawing (see CloakHider) has nothing left to draw: what lies behind
+        //it is drawn by the game itself, and its views are let go.
+        if(!switchingOff && CloakHider.isHiding(key, level.getGameTime()))
+        {
             return;
         }
 

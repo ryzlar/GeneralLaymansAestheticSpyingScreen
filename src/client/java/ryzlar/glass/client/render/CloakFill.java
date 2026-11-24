@@ -265,7 +265,63 @@ public final class CloakFill
         fill.clear();
         ring.clear();
         Long2ObjectOpenHashMap<Column> realColumns = new Long2ObjectOpenHashMap<>();
+        Long2ObjectOpenHashMap<Column> made = makeGround(level, area, realColumns);
+        buildMeshes(level, made, realColumns);
+    }
 
+    /**
+     * The hidden part as the chunk builder is to see it while the cloak hides its blocks (see {@link CloakHider}): per
+     * block of it, the block in its place (the made-up ground, air above it) and the light there, where they differ from
+     * the real world. The same blocks and light the view-drawn cloak shows, so both look alike.
+     */
+    public static CloakHider.Hidden hide(ClientLevel level, Area area)
+    {
+        Long2ObjectOpenHashMap<Column> made = makeGround(level, area, new Long2ObjectOpenHashMap<>());
+        Terrain terrain = new Terrain(level, area, made);
+        AABB hidden = area.hidden();
+        BlockPos a = area.column(0, area.minAcross(), 0);
+        BlockPos b = area.column(area.depth() - 1, area.maxAcross(), 0);
+        int minX = Math.min(Math.min(a.getX(), b.getX()), (int)Math.floor(hidden.minX + 1.0E-4D));
+        int maxX = Math.max(Math.max(a.getX(), b.getX()), (int)Math.ceil(hidden.maxX - 1.0E-4D) - 1);
+        int minZ = Math.min(Math.min(a.getZ(), b.getZ()), (int)Math.floor(hidden.minZ + 1.0E-4D));
+        int maxZ = Math.max(Math.max(a.getZ(), b.getZ()), (int)Math.ceil(hidden.maxZ - 1.0E-4D) - 1);
+        int minY = (int)Math.floor(hidden.minY + 1.0E-4D);
+        int maxY = (int)Math.ceil(hidden.maxY - 1.0E-4D) - 1;
+        for(Column column : made.values())
+        {
+            minY = Math.min(minY, column.height() - 3);
+            maxY = Math.max(maxY, column.height() + 1);
+        }
+        int sizeX = maxX - minX + 1, sizeY = maxY - minY + 1, sizeZ = maxZ - minZ + 1;
+        BlockState[] states = new BlockState[sizeX * sizeY * sizeZ];
+        byte[] sky = new byte[states.length];
+        byte[] block = new byte[states.length];
+        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+        int i = 0;
+        for(int y = minY; y <= maxY; y++)
+        {
+            for(int z = minZ; z <= maxZ; z++)
+            {
+                for(int x = minX; x <= maxX; x++, i++)
+                {
+                    pos.set(x, y, z);
+                    BlockState instead = terrain.getBlockState(pos);
+                    states[i] = instead == level.getBlockState(pos) ? null : instead;
+                    int skyLight = terrain.getBrightness(LightLayer.SKY, pos);
+                    int blockLight = terrain.getBrightness(LightLayer.BLOCK, pos);
+                    sky[i] = (byte)(skyLight == level.getBrightness(LightLayer.SKY, pos) ? -1 : skyLight);
+                    block[i] = (byte)(blockLight == level.getBrightness(LightLayer.BLOCK, pos) ? -1 : blockLight);
+                }
+            }
+        }
+        //A block changing here changes the made-up ground (it is worked out from the columns round the hidden part).
+        AABB looked = new AABB(minX - SAMPLE - 2, minY - SCAN, minZ - SAMPLE - 2, maxX + SAMPLE + 3, maxY + Terrain.SKY_SCAN + 2, maxZ + SAMPLE + 3);
+        return new CloakHider.Hidden(minX, minY, minZ, sizeX, sizeY, sizeZ, states, sky, block, hidden, looked);
+    }
+
+    /** Made-up ground for the hidden columns, carried on from the natural ground around them. */
+    private static Long2ObjectOpenHashMap<Column> makeGround(ClientLevel level, Area area, Long2ObjectOpenHashMap<Column> realColumns)
+    {
         //The ground around the hidden part.
         List<int[]> samplePos = new ArrayList<>();
         List<Column> samples = new ArrayList<>();
@@ -278,7 +334,7 @@ public final class CloakFill
                 {
                     continue;
                 }
-                Column column = realColumn(level, area.column(along, across, 0), realColumns);
+                Column column = realColumn(area, level, area.column(along, across, 0), realColumns);
                 if(column != null)
                 {
                     samplePos.add(new int[] { along, across });
@@ -357,7 +413,11 @@ public final class CloakFill
                 }
             }
         }
+        return made;
+    }
 
+    private void buildMeshes(ClientLevel level, Long2ObjectOpenHashMap<Column> made, Long2ObjectOpenHashMap<Column> realColumns)
+    {
         Terrain terrain = new Terrain(level, area, made);
         Drawer drawer = new Drawer(terrain, area.lightPos());
         int aboveHidden = (int)Math.ceil(area.hidden().maxY);
@@ -384,7 +444,7 @@ public final class CloakFill
                 if(behind)
                 {
                     //Just behind the hidden part: the top of the real ground again.
-                    column = realColumn(level, base, realColumns);
+                    column = realColumn(area, level, base, realColumns);
                     if(column != null)
                     {
                         drawer.draw(ring, new BlockPos(base.getX(), column.height(), base.getZ()));
@@ -401,7 +461,7 @@ public final class CloakFill
                         Column neighbour = made.get(columnKey(next));
                         if(neighbour == null)
                         {
-                            neighbour = realColumn(level, next, realColumns);
+                            neighbour = realColumn(area, level, next, realColumns);
                         }
                         if(neighbour != null)
                         {
@@ -424,7 +484,7 @@ public final class CloakFill
                 //The real world beside the hidden part (the clip plane cut it away too): everything from just under its
                 //ground (or its lowest neighbour's) up, so houses, fences and crops come back as well as the ground.
                 int low = area.groundY();
-                Column real = realColumn(level, base, realColumns);
+                Column real = realColumn(area, level, base, realColumns);
                 if(real != null)
                 {
                     low = Math.min(low, real.height());
@@ -435,7 +495,7 @@ public final class CloakFill
                     Column neighbour = made.get(columnKey(next));
                     if(neighbour == null)
                     {
-                        neighbour = realColumn(level, next, realColumns);
+                        neighbour = realColumn(area, level, next, realColumns);
                     }
                     if(neighbour != null)
                     {
@@ -520,16 +580,16 @@ public final class CloakFill
         }
     }
 
-    /** {@link #realColumn(ClientLevel, BlockPos)}, each column looked up once per build. */
+    /** {@link #realColumn(Area, ClientLevel, BlockPos)}, each column looked up once per build. */
     @Nullable
-    private Column realColumn(ClientLevel level, BlockPos column, Long2ObjectOpenHashMap<Column> known)
+    private static Column realColumn(Area area, ClientLevel level, BlockPos column, Long2ObjectOpenHashMap<Column> known)
     {
         long key = columnKey(column);
         if(known.containsKey(key))
         {
             return known.get(key);
         }
-        Column found = realColumn(level, column);
+        Column found = realColumn(area, level, column);
         known.put(key, found);
         return found;
     }
@@ -539,7 +599,7 @@ public final class CloakFill
      * the hidden part. Null if there is none in range.
      */
     @Nullable
-    private Column realColumn(ClientLevel level, BlockPos column)
+    private static Column realColumn(Area area, ClientLevel level, BlockPos column)
     {
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
         for(int y = area.groundY() + SCAN; y >= area.groundY() - SCAN; y--)
@@ -551,7 +611,7 @@ public final class CloakFill
             }
             BlockState state = level.getBlockState(pos);
             BlockPos above = pos.above();
-            if(isWaterSurface(state, level, above))
+            if(isWaterSurface(area, state, level, above))
             {
                 //Over water the "ground" is the water's surface (a cloaked boat or jetty leaves water, not a hole to
                 //the sea floor).
@@ -576,7 +636,7 @@ public final class CloakFill
      * a block tall (paths and farmland are a little lower than a full block).
      */
     /** Still water with nothing on it (or only what the cloak hides): the top of a sea, lake or river. */
-    private boolean isWaterSurface(BlockState state, ClientLevel level, BlockPos above)
+    private static boolean isWaterSurface(Area area, BlockState state, ClientLevel level, BlockPos above)
     {
         if(!state.getFluidState().is(net.minecraft.tags.FluidTags.WATER) || !state.getFluidState().isSource())
         {

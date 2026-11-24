@@ -341,6 +341,17 @@ public final class SpyViewRenderer
     }
 
     /**
+     * A cloak that hid its blocks (see {@link CloakHider}) is switching off: its views were let go meanwhile, so draw them
+     * again, whole and every frame, until {@code untilGameTime} (its switch-off animation reads them).
+     */
+    public void wake(TerminalPlacement placement, long untilGameTime)
+    {
+        request(placement, false);
+        SpyView view = views.get(placement.channel);
+        view.keepAliveUntil = Math.max(view.keepAliveUntil, untilGameTime);
+    }
+
+    /**
      * How to draw a steady cloak side's image (see {@link #request(TerminalPlacement, boolean)}): with where its last
      * image was drawn from, if that was only part of the screen. Null: an ordinary screen-space image.
      */

@@ -219,6 +219,9 @@ public class GlassClientGameTest implements FabricClientGameTest
         server.runCommand(power + "minecraft:redstone_block");
         context.waitTicks(100);
         context.takeScreenshot("ring_on_front");
+        //A steady cloak hides its blocks from the chunk builder instead of drawing views (CloakHider).
+        check(context.computeOnClient(mc -> ryzlar.glass.client.render.CloakHider.state(0, RING_Y0, 12) != null), "the cloak hides the farm from the chunk builder");
+        check(context.computeOnClient(mc -> ryzlar.glass.client.render.SpyViewRenderer.INSTANCE.viewCount() == 0), "a cloak that hides its blocks draws no views");
         server.runCommand("tp @p 0.5 -47 30.5 180 42");
         context.waitTicks(25);
         context.takeScreenshot("ring_on_high");

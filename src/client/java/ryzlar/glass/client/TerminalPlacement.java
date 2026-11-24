@@ -60,6 +60,9 @@ public class TerminalPlacement
     /** Cloak side: its ground, rebuilt from the surroundings (null for the top and bottom sides). */
     @org.jetbrains.annotations.Nullable
     private CloakFill fill;
+    /** Cloak side: its ground, as {@link ryzlar.glass.client.render.CloakHider} hides it (null for the top and bottom). */
+    @org.jetbrains.annotations.Nullable
+    private CloakFill.Area hiderArea;
 
     /** Cloak side: the part of the world this side hides (the screen's glass included). */
     private AABB hidden = new AABB(0, 0, 0, 0, 0, 0);
@@ -324,6 +327,7 @@ public class TerminalPlacement
         cullRender = true;
         hidden = hiddenBox(side, plane - CLIP_MARGIN, outer + 0.5D);
         CloakFill.Area area = side.getAxis().isHorizontal() ? areaOf(side, outer, (int)Math.round(depth)) : null;
+        hiderArea = area;
         fill = area == null ? null : new CloakFill(area);
     }
 
@@ -344,7 +348,8 @@ public class TerminalPlacement
         hidden = box;
         if(side.getAxis().isHorizontal())
         {
-            fill = new CloakFill(fieldArea(side, box));
+            hiderArea = fieldArea(side, box);
+            fill = new CloakFill(hiderArea);
         }
         else if(side == Direction.UP)
         {
@@ -402,6 +407,19 @@ public class TerminalPlacement
             case Y -> new AABB(box.minX, a, box.minZ, box.maxX, b, box.maxZ);
             case Z -> new AABB(box.minX, box.minY, a, box.maxX, box.maxY, b);
         };
+    }
+
+    /** Cloak side: the part of the world it hides. */
+    public AABB hiddenPart()
+    {
+        return hidden;
+    }
+
+    /** Cloak side: its ground and hidden part, for hiding its blocks from the world drawing. Null for the top and bottom. */
+    @org.jetbrains.annotations.Nullable
+    public CloakFill.Area hiderArea()
+    {
+        return hiderArea;
     }
 
     /** Cloak side: true if this block lies in the part of the world this side hides. */
