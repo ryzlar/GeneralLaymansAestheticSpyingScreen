@@ -26,6 +26,10 @@ public class GlassClient implements ClientModInitializer
         ryzlar.glass.client.tome.TomeClient.init();
 
         BlockRenderLayerMap.putBlocks(ChunkSectionLayer.CUTOUT, GlassRegistry.GLASS_EXTENSION, GlassRegistry.GLASS_PROJECTOR, GlassRegistry.GLASS_WIRELESS_EXTENSION);
+        //A shader pack's cloak switching on or off: its blocks turn into nano pixels and stream into the projector.
+        BlockRenderLayerMap.putBlock(GlassRegistry.NANO_VEIL, ChunkSectionLayer.TRANSLUCENT);
+        net.fabricmc.fabric.api.client.particle.v1.ParticleFactoryRegistry.getInstance()
+                .register(GlassRegistry.NANO_PARTICLE, ryzlar.glass.client.render.NanoParticle.Provider::new);
 
         BlockEntityRenderers.register(GlassRegistry.GLASS_EXTENSION_BE, GlassBlockEntityRenderer::new);
         BlockEntityRenderers.register(GlassRegistry.GLASS_PROJECTOR_BE, GlassBlockEntityRenderer::new);

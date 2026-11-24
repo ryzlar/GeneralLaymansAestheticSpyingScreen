@@ -43,9 +43,16 @@ public enum ViewBackend
         return RendererMods.sodiumBackend() ? SODIUM : UNSUPPORTED;
     }
 
+    /** Tests only: behave as with a shader pack on (no views), to test the cloak's shader-pack path without Iris. */
+    public static volatile boolean testNoViews;
+
     /** True if screens and cloaks can draw their views now. */
     public boolean drawsViews()
     {
+        if(testNoViews)
+        {
+            return false;
+        }
         return switch(this)
         {
             case VANILLA -> true;

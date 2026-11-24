@@ -17,6 +17,7 @@ import ryzlar.glass.client.sound.GlassAmbienceSound;
 
 import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -59,11 +60,17 @@ public class TerminalPlacement
     /** Cloak side: its ground, rebuilt from the surroundings (null for the top and bottom sides). */
     @org.jetbrains.annotations.Nullable
     private CloakFill fill;
+    /** Cloak side: its ground, as {@link ryzlar.glass.client.render.CloakHider} hides it (null for the top and bottom). */
+    @org.jetbrains.annotations.Nullable
+    private CloakFill.Area hiderArea;
 
     /** Cloak side: the part of the world this side hides (the screen's glass included). */
     private AABB hidden = new AABB(0, 0, 0, 0, 0, 0);
     /** Cloak: the placement of each side of the screen, made when first needed. */
     private final Map<Direction, TerminalPlacement> faces = new EnumMap<>(Direction.class);
+    /** Cloak: the sides the screen's glass faces (its blocks' active faces), worked out when first needed. */
+    @org.jetbrains.annotations.Nullable
+    private Set<Direction> screenSides;
 
     public TerminalPlacement(String channel, GlassProjectorBlockEntity master)
     {
@@ -216,6 +223,7 @@ public class TerminalPlacement
         if(cloak)
         {
             //The screen changed shape, so the hidden part of the world did too.
+            screenSides = null;
             for(Map.Entry<Direction, TerminalPlacement> e : faces.entrySet())
             {
                 e.getValue().placeCloakPlane(e.getKey());
@@ -243,6 +251,25 @@ public class TerminalPlacement
             }
         }
         cullRender = cull;
+    }
+
+    /** Cloak: the sides the screen's glass faces, e.g. all four for a ring of walls. */
+    public Set<Direction> screenSides()
+    {
+        if(screenSides == null)
+        {
+            Set<Direction> sides = EnumSet.noneOf(Direction.class);
+            for(GlassBaseBlockEntity base : activeBlocks())
+            {
+                sides.addAll(base.activeFaces);
+            }
+            if(sides.isEmpty())
+            {
+                return sides; //no glass registered yet: look again next time
+            }
+            screenSides = sides;
+        }
+        return screenSides;
     }
 
     /** Cloak: the sides made so far (one per side seen). */
@@ -300,6 +327,7 @@ public class TerminalPlacement
         cullRender = true;
         hidden = hiddenBox(side, plane - CLIP_MARGIN, outer + 0.5D);
         CloakFill.Area area = side.getAxis().isHorizontal() ? areaOf(side, outer, (int)Math.round(depth)) : null;
+        hiderArea = area;
         fill = area == null ? null : new CloakFill(area);
     }
 
@@ -320,7 +348,8 @@ public class TerminalPlacement
         hidden = box;
         if(side.getAxis().isHorizontal())
         {
-            fill = new CloakFill(fieldArea(side, box));
+            hiderArea = fieldArea(side, box);
+            fill = new CloakFill(hiderArea);
         }
         else if(side == Direction.UP)
         {
@@ -378,6 +407,19 @@ public class TerminalPlacement
             case Y -> new AABB(box.minX, a, box.minZ, box.maxX, b, box.maxZ);
             case Z -> new AABB(box.minX, box.minY, a, box.maxX, box.maxY, b);
         };
+    }
+
+    /** Cloak side: the part of the world it hides. */
+    public AABB hiddenPart()
+    {
+        return hidden;
+    }
+
+    /** Cloak side: its ground and hidden part, for hiding its blocks from the world drawing. Null for the top and bottom. */
+    @org.jetbrains.annotations.Nullable
+    public CloakFill.Area hiderArea()
+    {
+        return hiderArea;
     }
 
     /** Cloak side: true if this block lies in the part of the world this side hides. */

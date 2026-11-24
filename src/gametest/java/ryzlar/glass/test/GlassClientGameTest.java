@@ -133,7 +133,21 @@ public class GlassClientGameTest implements FabricClientGameTest
         server.runCommand("tp @p -58 -60 70 180 5");
         settle(singleplayer, context);
         server.runCommand("setblock -66 -61 50 minecraft:redstone_block");
-        context.waitTicks(80);
+        boolean noViews = context.computeOnClient(mc -> ryzlar.glass.client.render.ViewBackend.testNoViews);
+        if(noViews)
+        {
+            //As with a shader pack: the walls rise as nano pixels, the build goes behind them, the roof closes.
+            for(int t = 0; t <= 48; t += 4)
+            {
+                context.takeScreenshot(String.format("field_on_t%02d", t));
+                context.waitTicks(4);
+            }
+            context.waitTicks(28);
+        }
+        else
+        {
+            context.waitTicks(80);
+        }
         //Spectator, so the high views do not fall.
         server.runCommand("gamemode spectator @p");
         //Far enough to see where the cloak's ground ends (the void showed as pale triangles near the horizon).
@@ -181,6 +195,134 @@ public class GlassClientGameTest implements FabricClientGameTest
         server.runCommand("tp @p -57.5 -46 44.5 180 80");
         context.waitTicks(25);
         context.takeScreenshot("cloakonly_straight_down_tree");
+        if(noViews)
+        {
+            //Switching off: the roof opens, the walls sink, the build comes back from the top down.
+            server.runCommand("tp @p -57.5 -54 66 180 18");
+            context.waitTicks(25);
+            server.runCommand("setblock -66 -61 50 minecraft:grass_block");
+            for(int t = 0; t <= 48; t += 4)
+            {
+                context.takeScreenshot(String.format("field_off_t%02d", t));
+                context.waitTicks(4);
+            }
+        }
+    }
+
+    /** The cloaked ring of {@link #ringOnly}: 2 high round a farm, the projector in the middle of the south wall. */
+    private static final int RING_X0 = -6, RING_X1 = 6, RING_Z0 = 10, RING_Z1 = 20, RING_Y0 = -60, RING_Y1 = -59;
+    private static final BlockPos RING_PROJECTOR = new BlockPos(0, RING_Y0, RING_Z1);
+
+    /**
+     * A cloak on a ring of normal extensions round a farm (as in a village), switched off and on again by redstone. Takes
+     * screenshots every few ticks and logs, per sample, how many of the ring's blocks are on, switching off, or drawing
+     * the 1.12 white flash, to chase the white panels the ring showed while switching off.
+     */
+    private static void ringOnly(TestSingleplayerContext singleplayer, ClientGameTestContext context, TestServerContext server)
+    {
+        server.runCommand("fill -30 -61 -10 30 -61 50 minecraft:grass_block");
+        server.runCommand("fill -30 -60 -10 30 -50 50 minecraft:air");
+        //The farm: farmland with a water row and grown wheat, inside the ring.
+        server.runCommand(String.format("fill %d -61 %d %d -61 %d minecraft:farmland[moisture=7]", RING_X0 + 1, RING_Z0 + 1, RING_X1 - 1, RING_Z1 - 1));
+        server.runCommand(String.format("fill %d -61 15 %d -61 15 minecraft:water", RING_X0 + 1, RING_X1 - 1));
+        //A house behind it, to see through the cloak.
+        server.runCommand("fill -4 -60 0 4 -56 4 minecraft:oak_planks hollow");
+        server.runCommand(String.format("fill %d %d %d %d %d %d generallaymansaestheticspyingscreen:glass_extension", RING_X0, RING_Y0, RING_Z0, RING_X1, RING_Y1, RING_Z1));
+        server.runCommand(String.format("fill %d %d %d %d %d %d minecraft:air", RING_X0 + 1, RING_Y0, RING_Z0 + 1, RING_X1 - 1, RING_Y1, RING_Z1 - 1));
+        server.runCommand(String.format("fill %d -60 %d %d -60 14 minecraft:wheat[age=7]", RING_X0 + 1, RING_Z0 + 1, RING_X1 - 1));
+        server.runCommand(String.format("fill %d -60 16 %d -60 %d minecraft:carrots[age=7]", RING_X0 + 1, RING_X1 - 1, RING_Z1 - 1));
+        server.runCommand(String.format("setblock %d %d %d generallaymansaestheticspyingscreen:glass_projector{placingFace:\"south\"}", RING_PROJECTOR.getX(), RING_PROJECTOR.getY(), RING_PROJECTOR.getZ()));
+        context.waitTicks(2);
+        server.runOnServer(s -> {
+            GlassProjectorBlockEntity projector = (GlassProjectorBlockEntity)s.overworld().getBlockEntity(RING_PROJECTOR);
+            projector.cloak = true;
+            projector.sync();
+        });
+        server.runCommand("gamemode spectator @p");
+        server.runCommand("tp @p 0.5 -60 30.5 180 3");
+        settle(singleplayer, context);
+        String power = String.format("setblock %d -61 %d ", RING_PROJECTOR.getX(), RING_PROJECTOR.getZ());
+        server.runCommand(power + "minecraft:redstone_block");
+        //Switching on: the nano wave (or, with no views as with a shader pack, the farm going from the projector out).
+        for(int t = 0; t <= 45; t += 5)
+        {
+            context.takeScreenshot(String.format("ring_appear_t%02d", t));
+            context.waitTicks(5);
+        }
+        context.waitTicks(50);
+        context.takeScreenshot("ring_on_front");
+        //A cloak of glass blocks draws its views (it shows what lies behind it through the glass); only with a shader pack
+        //(no views) does it hide its blocks from the chunk builder instead (CloakHider).
+        if(context.computeOnClient(mc -> ryzlar.glass.client.render.ViewBackend.testNoViews))
+        {
+            check(context.computeOnClient(mc -> ryzlar.glass.client.render.CloakHider.state(0, RING_Y0, 12) != null), "with a shader pack the cloak hides the farm from the chunk builder");
+            check(context.computeOnClient(mc -> ryzlar.glass.client.render.SpyViewRenderer.INSTANCE.viewCount() == 0), "a cloak that hides its blocks draws no views");
+        }
+        else
+        {
+            check(context.computeOnClient(mc -> ryzlar.glass.client.render.CloakHider.state(0, RING_Y0, 12) == null), "a glass cloak does not hide its blocks");
+            check(context.computeOnClient(mc -> ryzlar.glass.client.render.SpyViewRenderer.INSTANCE.viewCount() > 0), "a glass cloak draws its views");
+        }
+        server.runCommand("tp @p 0.5 -47 30.5 180 42");
+        context.waitTicks(25);
+        context.takeScreenshot("ring_on_high");
+        server.runCommand("tp @p 12.5 -50 26.5 135 30");
+        context.waitTicks(25);
+        context.takeScreenshot("ring_on_high_corner");
+
+        server.runCommand("tp @p 0.5 -60 30.5 180 3");
+        context.waitTicks(30);
+        server.runCommand(power + "minecraft:grass_block");
+        for(int t = 0; t <= 60; t += 3)
+        {
+            context.takeScreenshot(String.format("ring_off_t%02d", t));
+            String state = ringState(context);
+            LOGGER.info("GLASS ring off t{}: {}", t, state);
+            check(state.contains(" 0 white"), "no white flash on the cloak at t" + t);
+            context.waitTicks(3);
+        }
+        context.waitTicks(40);
+        server.runCommand(power + "minecraft:redstone_block");
+        for(int t = 0; t <= 45; t += 3)
+        {
+            context.takeScreenshot(String.format("ring_on_t%02d", t));
+            LOGGER.info("GLASS ring on t{}: {}", t, ringState(context));
+            context.waitTicks(3);
+        }
+
+        //Flicked off and straight back on (a lever flicked twice), while the switch-off is still going.
+        context.waitTicks(60);
+        server.runCommand(power + "minecraft:grass_block");
+        context.waitTicks(10);
+        server.runCommand(power + "minecraft:redstone_block");
+        for(int t = 0; t <= 60; t += 3)
+        {
+            context.takeScreenshot(String.format("ring_flick_t%02d", t));
+            String state = ringState(context);
+            LOGGER.info("GLASS ring flick t{}: {}", t, state);
+            check(state.contains(" 0 white"), "no white flash on the cloak at t" + t);
+            context.waitTicks(3);
+        }
+    }
+
+    /** The ring's blocks on the client: on, switching off, and drawing the white flash (off, not switching off, fading). */
+    private static String ringState(ClientGameTestContext context)
+    {
+        return context.computeOnClient(mc -> {
+            int on = 0, switchingOff = 0, white = 0, glass = 0, fresh = 0;
+            for(BlockPos pos : BlockPos.betweenClosed(RING_X0, RING_Y0, RING_Z0, RING_X1, RING_Y1, RING_Z1))
+            {
+                if(mc.level.getBlockEntity(pos) instanceof GlassBaseBlockEntity base)
+                {
+                    glass++;
+                    on += base.active ? 1 : 0;
+                    switchingOff += base.isSwitchingOff() ? 1 : 0;
+                    white += !base.active && !base.isSwitchingOff() && base.fadeoutTime > 0 && !base.shownCloak ? 1 : 0;
+                    fresh += base.active && base.fadeoutTime > 0 ? 1 : 0;
+                }
+            }
+            return glass + " glass, " + on + " on, " + switchingOff + " switching off, " + white + " white (off), " + fresh + " just on";
+        });
     }
 
     /**
@@ -288,9 +430,29 @@ public class GlassClientGameTest implements FabricClientGameTest
             server.runCommand("gamerule doWeatherCycle false");
             server.runCommand("weather clear");
             //GLASS_TEST_ONLY=cloak: only the cloak field, looked at from many sides (quick, to chase a cloak bug).
+            //GLASS_TEST_ONLY=cloakshaders: the same, as with a shader pack on (no views), filming it switching on and off.
+            if("cloakshaders".equals(System.getenv("GLASS_TEST_ONLY")))
+            {
+                context.runOnClient(mc -> ryzlar.glass.client.render.ViewBackend.testNoViews = true);
+                cloakOnly(singleplayer, context, server);
+                return;
+            }
             if("cloak".equals(System.getenv("GLASS_TEST_ONLY")))
             {
                 cloakOnly(singleplayer, context, server);
+                return;
+            }
+            //GLASS_TEST_ONLY=ring: only a cloak on a ring of extensions, switched off and on.
+            //GLASS_TEST_ONLY=ringshaders: the same, as with a shader pack on (no views: the hiding itself is the animation).
+            if("ringshaders".equals(System.getenv("GLASS_TEST_ONLY")))
+            {
+                context.runOnClient(mc -> ryzlar.glass.client.render.ViewBackend.testNoViews = true);
+                ringOnly(singleplayer, context, server);
+                return;
+            }
+            if("ring".equals(System.getenv("GLASS_TEST_ONLY")))
+            {
+                ringOnly(singleplayer, context, server);
                 return;
             }
             tome(context, server, "tome".equals(System.getenv("GLASS_TEST_ONLY")));

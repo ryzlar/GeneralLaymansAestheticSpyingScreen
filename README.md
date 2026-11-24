@@ -74,8 +74,9 @@ The exact grids are in the GLASS Tome (and in any recipe viewer).
 - Minecraft **1.21.8** with [Fabric Loader](https://fabricmc.net/) 0.17 or newer and
   [Fabric API](https://modrinth.com/mod/fabric-api).
 - Needed on **both the client and the server**.
-- **Sodium** 0.7 works, screens and cloaks included. **Iris** works too, but while a shader pack is on, screens show a
-  glow and cloaks plain glass (you are told when you join); everything else works.
+- **Sodium** 0.7 works, screens and cloaks included. **Iris** works too, cloaks included even with a shader pack on
+  (with their own nano animation); while a shader pack is on, screens show a glow instead of the camera image (you are
+  told when you join).
 
 ### Server settings
 

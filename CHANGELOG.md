@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.2.0+1.21.8
+
+Client and server both need 1.2.0: a 1.1.0 client is told to update when it joins a 1.2.0 server.
+
+### New
+
+- **Cloaks work with shader packs** (Iris with Complementary, Bliss and others): the cloaked build is gone, and the
+  shader draws what lies behind it, shadows included.
+- **Nano animation with shader packs**: a cloak field's walls rise as a ring of glowing nano blocks, the build inside
+  goes from the ground up behind them and the roof closes in nano; a glass cloak's build turns to nano blocks from the
+  projector outwards. The blocks that go stream into the projector as nano pixels, and back out when it switches off.
+
+### Changed
+
+- **Cloak fields are much lighter**: a field that is on no longer draws the world again for every side of it. Its build
+  is left out of the world drawing instead (the ground carried on across it), so it costs almost nothing. Switching on
+  and off without a shader pack still plays the walls rising and sinking.
+- A cloak field now hides its build from every side outside it; inside it, your base is there as always.
+- A cloak of normal extension glass keeps showing what lies behind the glass as seen through it (without shaders).
+
+### Fixed
+
+- Seen from right above a cloak field, its roof no longer shows white holes into the void or misses houses around it.
+- The top of a cloaked ring of glass no longer shows strips of sky when seen from across it.
+- Switching a cloak off no longer shows a blown-up, colourful piece of its picture.
+- Flicking a cloak off and straight back on no longer flashes white panels on its glass.
+
 ## 1.1.0+1.21.8
 
 Client and server both need 1.1.0: a 1.0.0 client is told to update when it joins a 1.1.0 server.

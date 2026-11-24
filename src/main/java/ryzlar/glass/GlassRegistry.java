@@ -58,6 +58,16 @@ public final class GlassRegistry
             BlockBehaviour.Properties.ofFullCopy(Blocks.IRON_BLOCK).strength(3.0F).lightLevel(state -> 8).noOcclusion());
     public static final HoloBlocks.Emitter HOLO_EMITTER = registerBlock("holo_emitter", HoloBlocks.Emitter::new,
             BlockBehaviour.Properties.ofFullCopy(Blocks.END_ROD).lightLevel(state -> 10));
+    /**
+     * Never placed in the world, and no item: with a shader pack, what a cloak's blocks turn into for a moment as they go
+     * (or come back) while the cloak switches on (or off). Only the client's chunk builder ever sees it (CloakHider).
+     */
+    public static final Block NANO_VEIL = registerBlockOnly("nano_veil", net.minecraft.world.level.block.TransparentBlock::new,
+            BlockBehaviour.Properties.of().strength(-1.0F, 3600000.0F).noLootTable().noOcclusion().noCollission().lightLevel(state -> 15)
+                    .isValidSpawn(Blocks::never).isRedstoneConductor(Blocks::never).isSuffocating(Blocks::never).isViewBlocking(Blocks::never));
+    /** A nano pixel flying from one place to another (a cloaked build streaming into its projector, and back out). */
+    public static final net.minecraft.core.particles.SimpleParticleType NANO_PARTICLE = Registry.register(BuiltInRegistries.PARTICLE_TYPE,
+            Glass.id("nano"), net.fabricmc.fabric.api.particle.v1.FabricParticleTypes.simple());
 
     /** What a projection crystal holds. */
     public static final DataComponentType<ProjectionRef> PROJECTION = Registry.register(BuiltInRegistries.DATA_COMPONENT_TYPE, Glass.id("projection"),
@@ -103,6 +113,12 @@ public final class GlassRegistry
         ResourceKey<Item> itemKey = ResourceKey.create(Registries.ITEM, Glass.id(name));
         Registry.register(BuiltInRegistries.ITEM, itemKey, new BlockItem(block, new Item.Properties().setId(itemKey).useBlockDescriptionPrefix()));
         return block;
+    }
+
+    private static <B extends Block> B registerBlockOnly(String name, Function<BlockBehaviour.Properties, B> factory, BlockBehaviour.Properties properties)
+    {
+        ResourceKey<Block> key = ResourceKey.create(Registries.BLOCK, Glass.id(name));
+        return Registry.register(BuiltInRegistries.BLOCK, key, factory.apply(properties.setId(key)));
     }
 
     public static <T extends net.minecraft.world.entity.Entity> EntityType<T> registerEntity(String name, EntityType.Builder<T> builder)

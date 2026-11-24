@@ -53,6 +53,13 @@ public class GlassBlockEntityRenderer implements BlockEntityRenderer<GlassBaseBl
     @Override
     public void render(GlassBaseBlockEntity te, float partialTick, PoseStack poseStack, MultiBufferSource buffers, int light, int overlay, Vec3 cameraPos)
     {
+        BlockPos at = te.getBlockPos();
+        if(CloakHider.hidesAnything() && CloakHider.state(at.getX(), at.getY(), at.getZ()) != null)
+        {
+            //Hidden by a cloak (its own glass, a projector in it): drawn as nothing at all. The game draws this renderer
+            //even off screen, from a list of its own, so the chunk builder not seeing it does not stop it.
+            return;
+        }
         poseStack.pushPose();
         poseStack.translate(0.5D, 0.5D, 0.5D);
 
@@ -159,6 +166,12 @@ public class GlassBlockEntityRenderer implements BlockEntityRenderer<GlassBaseBl
     /** The 1.12 white flash, for when there is no camera image to show (no camera, or seen from inside a camera view). */
     private static void whiteFlash(GlassBaseBlockEntity te, PoseStack poseStack, MultiBufferSource buffers, float partialTick)
     {
+        if(te.shownCloak)
+        {
+            //A cloak's glass going off and on again (a lever flicked quickly: the server's switch-off still runs through
+            //the glass after the projector is back on) showed white panels.
+            return;
+        }
         boolean wirelessMaster = te instanceof GlassProjectorBlockEntity master && !master.wirelessPos.isEmpty();
         drawPlanes(te, poseStack, buffers.getBuffer(GlassRenderTypes.planes(!wirelessMaster)), 1F, 1F, 1F, -1F, wirelessMaster ? 0.501D : 0.502D, partialTick);
     }
@@ -185,6 +198,13 @@ public class GlassBlockEntityRenderer implements BlockEntityRenderer<GlassBaseBl
             return;
         }
 
+        //A cloak that hides its blocks from the world drawing (see CloakHider) has nothing left to draw: what lies behind
+        //it is drawn by the game itself, and its views are let go.
+        if(!switchingOff && CloakHider.isHiding(key, level.getGameTime()))
+        {
+            return;
+        }
+
         //Where the images come from: one view for a camera screen, one per side for a cloak.
         TerminalPlacement placement = null;
         boolean cloak;
@@ -197,11 +217,22 @@ public class GlassBlockEntityRenderer implements BlockEntityRenderer<GlassBaseBl
             placement = GlassClientState.INSTANCE.getTerminalPlacement(key);
             if(placement == null)
             {
+                if(level.getBlockEntity(masterPos) instanceof GlassProjectorBlockEntity master)
+                {
+                    te.shownCloak = master.cloak;
+                }
                 whiteFlash(te, poseStack, buffers, partialTick);
                 return;
             }
             placement.playAmbienceOnce();
             cloak = placement.cloak;
+        }
+        te.shownCloak = cloak;
+        if(cloak && !ViewBackend.current().drawsViews())
+        {
+            //With a shader pack a cloak has no views: it hides its blocks (CloakHider), which is its animation too. Asking
+            //for views anyway only made views that are never drawn, nor let go.
+            return;
         }
         //Switching feed: the old images, which the new feed wipes over.
         GlassClientState.Transition transition = switchingOff ? null : GlassClientState.INSTANCE.transitionFor(key);
@@ -285,7 +316,7 @@ public class GlassBlockEntityRenderer implements BlockEntityRenderer<GlassBaseBl
             {
                 continue; //a cloak side seen from behind is culled anyway, so do not draw (or render the view for) it
             }
-            Direction viewSide = faces.contains(face) ? face : faces.getFirst();
+            Direction viewSide = faces.contains(face) ? face : edgeView(placement, faces, face, pos, eye);
             ScreenImage image = image(spy, key, placement, cloak, viewSide, switchingOff, transition);
             if(image == null)
             {
@@ -310,6 +341,38 @@ public class GlassBlockEntityRenderer implements BlockEntityRenderer<GlassBaseBl
         }
     }
 
+    /**
+     * Which side's view a cloak shows on an edge of the glass (e.g. the top of a wall). The view of the side the eye is
+     * on: a ray through the edge runs on away from the eye, and only that side's view keeps what lies out there. The
+     * block's own side was wrong for a ring of walls seen from across it: the far wall's top showed its own side's view,
+     * which cuts away everything beyond that wall, so it showed as a strip of sky.
+     */
+    private static Direction edgeView(@org.jetbrains.annotations.Nullable TerminalPlacement placement, List<Direction> faces,
+                                      Direction edge, BlockPos pos, Vec3 eye)
+    {
+        Direction best = faces.getFirst();
+        if(placement == null)
+        {
+            return best;
+        }
+        Vec3 centre = Vec3.atCenterOf(pos);
+        double bestToward = Double.NEGATIVE_INFINITY;
+        for(Direction side : placement.screenSides())
+        {
+            if(side.getAxis() == edge.getAxis())
+            {
+                continue;
+            }
+            double toward = (eye.x - centre.x) * side.getStepX() + (eye.y - centre.y) * side.getStepY() + (eye.z - centre.z) * side.getStepZ();
+            if(toward > bestToward)
+            {
+                best = side;
+                bestToward = toward;
+            }
+        }
+        return best;
+    }
+
     /** The screen faces plus the faces across them (a wall's edges); not the back, which faces into what is hidden. */
     private static List<Direction> withEdges(List<Direction> faces)
     {
@@ -328,8 +391,6 @@ public class GlassBlockEntityRenderer implements BlockEntityRenderer<GlassBaseBl
     /** How long a cloak field's walls take to rise out of the ground (and sink back), in ticks. */
     private static final float FIELD_RISE_TICKS = 40F;
     private static final float FIELD_OUTSET = 0.01F;
-    /** How close to a cloak field's diagonal (blocks) the view of the other side seen is kept going too. */
-    private static final double FIELD_HANDOVER = 4D;
 
     /**
      * A cloak field: four walls and a roof around the box between the corner extensions, each showing what lies behind
@@ -368,14 +429,10 @@ public class GlassBlockEntityRenderer implements BlockEntityRenderer<GlassBaseBl
         //into the ground blocks, where nothing is drawn, and showed a thin line of the void.
         float y0 = (float)(box.minY - origin.getY() - 0.5D) + 0.002F, y1 = (float)(box.maxY - origin.getY() - 0.5D) + FIELD_OUTSET;
         float z0 = (float)(box.minZ - origin.getZ() - 0.5D) - FIELD_OUTSET, z1 = (float)(box.maxZ - origin.getZ() - 0.5D) + FIELD_OUTSET;
-        //Every side seen from outside shows the view of the side the eye is most in front of (see roofView): a side seen
-        //at a slant cut away a wide slab beside the field, out past where its ground is drawn back in, and showed the
-        //void there as pale triangles near the horizon.
+        //The walls (and from beside the field, the roof) show the view of the side the eye is most in front of (see
+        //roofView). From right above, the roof is split by where its rays leave the box (see roofPieces).
         Direction outside = roofView(box, eye);
-        double dx = eye.x < box.minX ? box.minX - eye.x : Math.max(0D, eye.x - box.maxX);
-        double dz = eye.z < box.minZ ? box.minZ - eye.z : Math.max(0D, eye.z - box.maxZ);
-        //Near the corner the other side may take over: keep its view going so it has an image when it does.
-        boolean nearCorner = Math.abs(dx - dz) < FIELD_HANDOVER;
+        Vec3 centre = Vec3.atCenterOf(origin);
         for(Direction side : new Direction[] { Direction.NORTH, Direction.SOUTH, Direction.WEST, Direction.EAST, Direction.UP })
         {
             boolean seen = switch(side)
@@ -397,29 +454,11 @@ public class GlassBlockEntityRenderer implements BlockEntityRenderer<GlassBaseBl
                 continue;
             }
             boolean roof = side == Direction.UP;
-            Direction view = outside == Direction.UP ? side : outside;
-            if(view != side && !roof && nearCorner)
-            {
-                image(spy, key, placement, true, side, switchingOff, null);
-            }
-            ScreenImage image = image(spy, key, placement, true, view, switchingOff, null);
-            if(image == null)
-            {
-                continue;
-            }
-            VertexConsumer consumer = image.consumer(buffers, true);
+            Direction fallback = outside == Direction.UP ? side : outside;
             //Walls rise (the wave's radius is how high they are); the roof closes once they are up.
             int[] wave = encodeWave(roof ? rise - height + 0.5F : rise, false);
             wave[3] = roof ? 0 : 128;
             Vector3f n = new Vector3f(side.getStepX(), side.getStepY(), side.getStepZ());
-            float[][] corners = switch(side)
-            {
-                case NORTH -> new float[][] { { x1, y0, z0 }, { x0, y0, z0 }, { x0, y1, z0 }, { x1, y1, z0 } };
-                case SOUTH -> new float[][] { { x0, y0, z1 }, { x1, y0, z1 }, { x1, y1, z1 }, { x0, y1, z1 } };
-                case WEST -> new float[][] { { x0, y0, z0 }, { x0, y0, z1 }, { x0, y1, z1 }, { x0, y1, z0 } };
-                case EAST -> new float[][] { { x1, y0, z1 }, { x1, y0, z0 }, { x1, y1, z0 }, { x1, y1, z1 } };
-                default -> new float[][] { { x0, y1, z1 }, { x1, y1, z1 }, { x1, y1, z0 }, { x0, y1, z0 } };
-            };
             //A ripple from someone going through (or brushing against) this side, in the same field coordinates as the
             //nano pixels below. Only on the side it happened on.
             int[] hit = { 32767, 32767 };
@@ -443,17 +482,46 @@ public class GlassBlockEntityRenderer implements BlockEntityRenderer<GlassBaseBl
                     sideRing = ring;
                 }
             }
-            for(float[] c : corners)
+            //The pieces of this side (from the projector's centre), each with the side whose view it shows.
+            List<float[][]> pieces = new ArrayList<>();
+            List<Direction> views = new ArrayList<>();
+            if(roof && outside == Direction.UP && !switchingOff && placement != null)
             {
-                //Position on the field for the nano pixels: along the wall and up it (the roof: across it).
-                float u = roof ? c[0] - x0 : (c[0] - x0) + (c[2] - z0);
-                float v = roof ? c[2] - z0 : c[1] - y0;
-                consumer.addVertex(pose, c[0], c[1], c[2])
-                        .setColor(wave[0], wave[1], wave[2], wave[3])
-                        .setUv(u, v)
-                        .setUv1(hit[0], hit[1])
-                        .setUv2(sideRing[0], sideRing[1])
-                        .setNormal(pose, n.x, n.y, n.z);
+                roofPieces(box, eye, centre, x0, x1, y1, z0, z1, pieces, views);
+            }
+            else
+            {
+                pieces.add(switch(side)
+                {
+                    case NORTH -> new float[][] { { x1, y0, z0 }, { x0, y0, z0 }, { x0, y1, z0 }, { x1, y1, z0 } };
+                    case SOUTH -> new float[][] { { x0, y0, z1 }, { x1, y0, z1 }, { x1, y1, z1 }, { x0, y1, z1 } };
+                    case WEST -> new float[][] { { x0, y0, z0 }, { x0, y0, z1 }, { x0, y1, z1 }, { x0, y1, z0 } };
+                    case EAST -> new float[][] { { x1, y0, z1 }, { x1, y0, z0 }, { x1, y1, z0 }, { x1, y1, z1 } };
+                    default -> new float[][] { { x0, y1, z1 }, { x1, y1, z1 }, { x1, y1, z0 }, { x0, y1, z0 } };
+                });
+                views.add(fallback);
+            }
+            for(int p = 0; p < pieces.size(); p++)
+            {
+                float[][] corners = pieces.get(p);
+                ScreenImage image = fieldImage(spy, key, placement, switchingOff, views.get(p), fallback, corners, centre);
+                if(image == null)
+                {
+                    continue;
+                }
+                VertexConsumer consumer = image.consumer(buffers, true);
+                for(float[] c : corners)
+                {
+                    //Position on the field for the nano pixels: along the wall and up it (the roof: across it).
+                    float u = roof ? c[0] - x0 : (c[0] - x0) + (c[2] - z0);
+                    float v = roof ? c[2] - z0 : c[1] - y0;
+                    consumer.addVertex(pose, c[0], c[1], c[2])
+                            .setColor(wave[0], wave[1], wave[2], wave[3])
+                            .setUv(u, v)
+                            .setUv1(hit[0], hit[1])
+                            .setUv2(sideRing[0], sideRing[1])
+                            .setNormal(pose, n.x, n.y, n.z);
+                }
             }
         }
         if(!switchingOff)
@@ -505,6 +573,69 @@ public class GlassBlockEntityRenderer implements BlockEntityRenderer<GlassBaseBl
         return eye.z < box.minZ ? Direction.NORTH : Direction.SOUTH;
     }
 
+    /**
+     * The roof of a cloak field seen from right above it, in pieces by where their rays leave the box. A ray through the
+     * middle goes down through the floor: the roof's own view (clipped at the floor, the ground all round drawn back in).
+     * A ray through the edge leaves through a wall and runs on, looking out over the land, far past what that view draws
+     * back in: there it cut away whole houses and left holes to the void where their floors were. So the edge pieces
+     * show the view of the side opposite that wall instead (clipped at the wall). The pieces meet where the eye sees the
+     * floor's edges through the roof: the floor seen through the roof is the floor shrunk towards the eye.
+     */
+    private static void roofPieces(net.minecraft.world.phys.AABB box, Vec3 eye, Vec3 centre, float x0, float x1, float y1, float z0, float z1,
+                                   List<float[][]> pieces, List<Direction> views)
+    {
+        double s = (eye.y - box.maxY) / Math.max(eye.y - box.minY, 1.0E-6D);
+        float ix0 = (float)(eye.x + (box.minX - eye.x) * s - centre.x), ix1 = (float)(eye.x + (box.maxX - eye.x) * s - centre.x);
+        float iz0 = (float)(eye.z + (box.minZ - eye.z) * s - centre.z), iz1 = (float)(eye.z + (box.maxZ - eye.z) * s - centre.z);
+        //All wound as the whole roof is.
+        pieces.add(new float[][] { { ix0, y1, iz1 }, { ix1, y1, iz1 }, { ix1, y1, iz0 }, { ix0, y1, iz0 } });
+        views.add(Direction.UP);
+        pieces.add(new float[][] { { ix1, y1, iz1 }, { x1, y1, z1 }, { x1, y1, z0 }, { ix1, y1, iz0 } });
+        views.add(Direction.WEST); //leaves through the east wall
+        pieces.add(new float[][] { { x0, y1, z1 }, { ix0, y1, iz1 }, { ix0, y1, iz0 }, { x0, y1, z0 } });
+        views.add(Direction.EAST);
+        pieces.add(new float[][] { { x0, y1, z1 }, { x1, y1, z1 }, { ix1, y1, iz1 }, { ix0, y1, iz1 } });
+        views.add(Direction.NORTH); //leaves through the south wall
+        pieces.add(new float[][] { { ix0, y1, iz0 }, { ix1, y1, iz0 }, { x1, y1, z0 }, { x0, y1, z0 } });
+        views.add(Direction.SOUTH);
+    }
+
+    /**
+     * The image for one piece of a field: the view of {@code view}, asked for only where this piece is. While that view
+     * has no recent image (just come into sight), {@code fallback}'s stands in: an old one smeared over the glass.
+     */
+    @org.jetbrains.annotations.Nullable
+    private static ScreenImage fieldImage(SpyViewRenderer spy, String key, @org.jetbrains.annotations.Nullable TerminalPlacement placement,
+                                          boolean switchingOff, Direction view, Direction fallback, float[][] corners, Vec3 centre)
+    {
+        ScreenImage image = image(spy, key, placement, true, view, switchingOff, null);
+        if(switchingOff || placement == null)
+        {
+            return image;
+        }
+        double minX = Double.POSITIVE_INFINITY, minY = Double.POSITIVE_INFINITY, minZ = Double.POSITIVE_INFINITY;
+        double maxX = Double.NEGATIVE_INFINITY, maxY = Double.NEGATIVE_INFINITY, maxZ = Double.NEGATIVE_INFINITY;
+        for(float[] c : corners)
+        {
+            minX = Math.min(minX, c[0]);
+            minY = Math.min(minY, c[1]);
+            minZ = Math.min(minZ, c[2]);
+            maxX = Math.max(maxX, c[0]);
+            maxY = Math.max(maxY, c[1]);
+            maxZ = Math.max(maxZ, c[2]);
+        }
+        net.minecraft.world.phys.AABB part = new net.minecraft.world.phys.AABB(minX, minY, minZ, maxX, maxY, maxZ).move(centre);
+        String channel = placement.forFace(view).channel;
+        spy.wantRegion(channel, part);
+        if(view == fallback || spy.isFresh(channel))
+        {
+            return image;
+        }
+        ScreenImage standIn = image(spy, key, placement, true, fallback, false, null);
+        spy.wantRegion(placement.forFace(fallback).channel, part);
+        return standIn;
+    }
+
     /** True when the outside of this face points towards the eye. */
     private static boolean faceSeen(BlockPos pos, Direction face, Vec3 eye)
     {
@@ -545,6 +676,9 @@ public class GlassBlockEntityRenderer implements BlockEntityRenderer<GlassBaseBl
         if(switchingOff || placement == null)
         {
             texture = spy.textureFor(cloak ? key + side_ : key);
+            //A cloak side's last image may cover only the part of the screen its glass took up: drawn as a whole-screen
+            //image, the switch-off showed a huge, blown-up piece of it.
+            steadyCloak = cloak && transition == null ? key + side_ : null;
         }
         else
         {

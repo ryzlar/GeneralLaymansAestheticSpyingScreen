@@ -33,6 +33,7 @@ public abstract class ClientLevelMixin implements LevelTimeAccess
     private void glass$blockChanged(BlockPos pos, BlockState oldState, BlockState newState, int flags, CallbackInfo ci)
     {
         CloakFill.blockChanged(pos);
+        ryzlar.glass.client.render.CloakHider.blockChanged(pos);
     }
 
     @Override

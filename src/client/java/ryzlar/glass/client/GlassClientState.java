@@ -654,6 +654,7 @@ public final class GlassClientState implements GlassClientBridge
             return false;
         });
         loadedProjectors.removeIf(be -> be.getLevel() != mc.level);
+        ryzlar.glass.client.render.CloakHider.tick(mc);
     }
 
     public void clear()
@@ -668,6 +669,7 @@ public final class GlassClientState implements GlassClientBridge
         punches.clear();
         loadedProjectors.clear();
         glassRegistrations.clear();
+        ryzlar.glass.client.render.CloakHider.clear();
         SpyViewRenderer.INSTANCE.releaseAll();
     }
 }

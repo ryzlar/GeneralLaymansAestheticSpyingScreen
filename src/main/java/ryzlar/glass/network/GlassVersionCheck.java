@@ -24,9 +24,10 @@ public final class GlassVersionCheck
 {
     /**
      * Goes up whenever client and server have to match. 1: 1.0.0 (which had no check). 2: holo cube scans twenty-one
-     * blocks across, shown at their real size.
+     * blocks across, shown at their real size. 3: the nano veil block and the nano particle (an older client is missing
+     * them, and would be turned away with the game's own registry error instead of this message).
      */
-    public static final int PROTOCOL = 2;
+    public static final int PROTOCOL = 3;
 
     /** Registered by clients that speak {@link #PROTOCOL}, in the configuration phase. Never actually sent. */
     public record ClientSpeaks() implements CustomPacketPayload
