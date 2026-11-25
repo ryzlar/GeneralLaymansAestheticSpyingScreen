@@ -21,6 +21,8 @@ public class GlassMixinPlugin implements IMixinConfigPlugin
     /** Mixins into Sodium itself (the Sodium view backend), only with a Sodium version they were made for. */
     private static final Set<String> SODIUM_ONLY = Set.of("SodiumWorldRendererMixin", "LevelSliceMixin");
     /** Mixins into Distant Horizons, only when it is installed. */
+    /** Mixins into Xaero's Minimap, only when it is installed. */
+    private static final Set<String> XAERO_MINIMAP_ONLY = Set.of("XaeroMinimapMixin");
     private static final Set<String> DISTANT_HORIZONS_ONLY = Set.of("DistantHorizonsRenderMixin", "DistantHorizonsFogMixin", "DistantHorizonsCloudsMixin");
 
     @Override
@@ -45,6 +47,10 @@ public class GlassMixinPlugin implements IMixinConfigPlugin
         if(SODIUM_ONLY.contains(name))
         {
             return RendererMods.sodiumBackend();
+        }
+        if(XAERO_MINIMAP_ONLY.contains(name))
+        {
+            return net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("xaerominimap");
         }
         if(DISTANT_HORIZONS_ONLY.contains(name))
         {

@@ -135,6 +135,11 @@ public class GlassClientGameTest implements FabricClientGameTest
             cloudWall(singleplayer, context, server);
             return;
         }
+        if("minimap".equals(System.getenv("GLASS_TEST_ONLY")))
+        {
+            minimap(singleplayer, context, server);
+            return;
+        }
         server.runCommand("tp @p -58 -60 70 180 5");
         settle(singleplayer, context);
         server.runCommand("setblock -66 -61 50 minecraft:redstone_block");
@@ -423,6 +428,35 @@ public class GlassClientGameTest implements FabricClientGameTest
         }
     }
 
+    /**
+     * GLASS_TEST_ONLY=minimap (with Xaero's Minimap): the field off, then on, seen on the minimap from outside it. The
+     * build must not show on the map while the field is on.
+     */
+    private static void minimap(TestSingleplayerContext singleplayer, ClientGameTestContext context, TestServerContext server)
+    {
+        server.runCommand("tp @p -58 -60 66 180 30");
+        context.waitTicks(100);
+        settle(singleplayer, context);
+        context.waitTicks(60);
+        context.takeScreenshot("minimap_off");
+        server.runCommand("setblock -66 -61 50 minecraft:redstone_block");
+        for(int t = 0; t <= 48; t += 4)
+        {
+            context.takeScreenshot(String.format("minimap_on_t%02d", t));
+            context.waitTicks(4);
+        }
+        context.waitTicks(60);
+        context.takeScreenshot("minimap_on");
+        server.runCommand("setblock -66 -61 50 minecraft:air");
+        for(int t = 0; t <= 48; t += 4)
+        {
+            context.takeScreenshot(String.format("minimap_off_t%02d", t));
+            context.waitTicks(4);
+        }
+        context.waitTicks(60);
+        context.takeScreenshot("minimap_off_again");
+    }
+
     /** Makes a channel at the terminal at {@code pos}, like the camera screen does. Returns its id. */
     private static String create(MinecraftServer server, BlockPos pos, String name, String password)
     {
@@ -477,7 +511,8 @@ public class GlassClientGameTest implements FabricClientGameTest
                 cloakOnly(singleplayer, context, server);
                 return;
             }
-            if("cloak".equals(System.getenv("GLASS_TEST_ONLY")) || "cloudwall".equals(System.getenv("GLASS_TEST_ONLY")))
+            if("cloak".equals(System.getenv("GLASS_TEST_ONLY")) || "cloudwall".equals(System.getenv("GLASS_TEST_ONLY"))
+                    || "minimap".equals(System.getenv("GLASS_TEST_ONLY")))
             {
                 cloakOnly(singleplayer, context, server);
                 return;

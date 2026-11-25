@@ -18,6 +18,7 @@
     "DistantHorizonsRenderMixin",
     "DistantHorizonsFogMixin",
     "DistantHorizonsCloudsMixin",
+    "XaeroMinimapMixin",
     "LevelWeatherMixin",
     "LivingEntityRendererMixin",
     "MinecraftMixin",

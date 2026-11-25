@@ -83,6 +83,13 @@ dependencies {
 	if(project.hasProperty("withDH")) {
 		modLocalRuntime "maven.modrinth:distanthorizons:${project.dh_version}"
 	}
+	// ./gradlew runClient -PwithXaero: Xaero's Minimap (maps the blocks around the player, so a cloak could show on it).
+	if(project.hasProperty("withXaero")) {
+		modLocalRuntime "maven.modrinth:xaeros-minimap:${project.xaero_minimap_version}"
+		// The minimap carries XaeroLib inside its jar, which the development copy leaves out: take it out of the jar.
+		def minimap = configurations.detachedConfiguration(dependencies.create("maven.modrinth:xaeros-minimap:${project.xaero_minimap_version}")).singleFile
+		modLocalRuntime files(zipTree(minimap).matching { include "META-INF/jars/xaerolib-*.jar" }.singleFile)
+	}
 }
 
 // Release checks with the real (remapped) jar, as players get it: ./gradlew prodServer, ./gradlew prodClient
@@ -103,6 +110,9 @@ dependencies {
 	}
 	if(project.hasProperty("withDH")) {
 		prodMods "maven.modrinth:distanthorizons:${project.dh_version}"
+	}
+	if(project.hasProperty("withXaero")) {
+		prodMods "maven.modrinth:xaeros-minimap:${project.xaero_minimap_version}"
 	}
 }
 
