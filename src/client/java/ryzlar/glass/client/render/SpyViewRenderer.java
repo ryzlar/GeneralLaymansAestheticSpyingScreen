@@ -67,6 +67,8 @@ import java.util.function.Consumer;
 public final class SpyViewRenderer
 {
     public static final SpyViewRenderer INSTANCE = new SpyViewRenderer();
+    /** Distant Horizons is installed: its clouds are copied into the views (see {@link DistantHorizonsClouds}). */
+    private static final boolean DISTANT_HORIZONS = net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("distanthorizons");
 
     /** Views drawn per frame at most. Each one costs about as much as drawing the world again. */
     private static final int MAX_VIEWS_PER_FRAME = 6;
@@ -739,6 +741,10 @@ public final class SpyViewRenderer
                 primeGraph(mc, level, view, modelView, cullProjection, position);
             }
             levelRenderer.renderLevel(gr.glass$getResourcePool(), deltaTracker, false, view.camera, modelView, projection, fogBuffer, fogColor, !foggy);
+            if(DISTANT_HORIZONS)
+            {
+                drawDistantHorizonsClouds(view, projection, modelView, position);
+            }
             CloakFill fill = placement.cloakFill();
             if(fill != null && view.target != null)
             {
@@ -798,6 +804,10 @@ public final class SpyViewRenderer
         try
         {
             levelRenderer.renderLevel(gr.glass$getResourcePool(), deltaTracker, false, view.camera, modelView, projection, fogBuffer, fogColor, !foggy);
+            if(DISTANT_HORIZONS)
+            {
+                drawDistantHorizonsClouds(view, projection, modelView, position);
+            }
             CloakFill fill = placement.cloakFill();
             if(fill != null && view.target != null)
             {
@@ -855,6 +865,27 @@ public final class SpyViewRenderer
         farBase.m22((newFar + near) / (near - newFar));
         farBase.m32(2F * newFar * near / (near - newFar));
         return farBase.mul(extra);
+    }
+
+    /**
+     * With Distant Horizons: its clouds, which it draws in the pass left out of views (Minecraft's own it switches off),
+     * copied into the view (see {@link DistantHorizonsClouds}). Tested against the view's own depth, so the world in
+     * front hides them.
+     */
+    private static void drawDistantHorizonsClouds(SpyView view, Matrix4f clipped, Matrix4f modelView, Vec3 camera)
+    {
+        Matrix4fStack stack = RenderSystem.getModelViewStack();
+        stack.pushMatrix();
+        stack.mul(modelView);
+        try
+        {
+            RenderSystem.setProjectionMatrix(view.projection.getBuffer(clipped), ProjectionType.PERSPECTIVE);
+            DistantHorizonsClouds.draw(camera);
+        }
+        finally
+        {
+            stack.popMatrix();
+        }
     }
 
     /**

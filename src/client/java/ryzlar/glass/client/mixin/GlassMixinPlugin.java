@@ -20,6 +20,8 @@ public class GlassMixinPlugin implements IMixinConfigPlugin
     private static final Set<String> VANILLA_ONLY = Set.of("VanillaSectionsMixin", "LevelRendererAccessor", "SectionOcclusionGraphAccessor");
     /** Mixins into Sodium itself (the Sodium view backend), only with a Sodium version they were made for. */
     private static final Set<String> SODIUM_ONLY = Set.of("SodiumWorldRendererMixin", "LevelSliceMixin");
+    /** Mixins into Distant Horizons, only when it is installed. */
+    private static final Set<String> DISTANT_HORIZONS_ONLY = Set.of("DistantHorizonsRenderMixin", "DistantHorizonsFogMixin", "DistantHorizonsCloudsMixin");
 
     @Override
     public void onLoad(String mixinPackage)
@@ -43,6 +45,10 @@ public class GlassMixinPlugin implements IMixinConfigPlugin
         if(SODIUM_ONLY.contains(name))
         {
             return RendererMods.sodiumBackend();
+        }
+        if(DISTANT_HORIZONS_ONLY.contains(name))
+        {
+            return net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("distanthorizons");
         }
         return true;
     }

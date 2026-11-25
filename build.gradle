@@ -63,6 +63,9 @@ dependencies {
 
 	// The Sodium view backend (ViewBackend.SODIUM) hooks into Sodium's renderer: compiled against it, never shipped.
 	modCompileOnly "maven.modrinth:sodium:${project.sodium_version}"
+	// DistantHorizonsClouds copies Distant Horizons' clouds into GLASS's views (only when it is installed): compiled
+	// against it, never shipped.
+	modCompileOnly "maven.modrinth:distanthorizons:${project.dh_version}"
 
 	// Compatibility runs: ./gradlew runClient -PwithSodium (or -PwithIris, which brings Sodium too).
 	if(project.hasProperty("withSodium") || project.hasProperty("withIris")) {
@@ -75,6 +78,10 @@ dependencies {
 		localRuntime "org.anarres:jcpp:1.4.14"
 		localRuntime "io.github.douira:glsl-transformer:3.0.0-pre3"
 		localRuntime "org.antlr:antlr4-runtime:4.13.1"
+	}
+	// ./gradlew runClient -PwithDH: Distant Horizons (draws far terrain itself, so a cloak could show up in it).
+	if(project.hasProperty("withDH")) {
+		modLocalRuntime "maven.modrinth:distanthorizons:${project.dh_version}"
 	}
 }
 
@@ -93,6 +100,9 @@ dependencies {
 	}
 	if(project.hasProperty("withIris")) {
 		prodMods "maven.modrinth:iris:${project.iris_version}"
+	}
+	if(project.hasProperty("withDH")) {
+		prodMods "maven.modrinth:distanthorizons:${project.dh_version}"
 	}
 }
 

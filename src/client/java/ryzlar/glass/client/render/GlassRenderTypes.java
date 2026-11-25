@@ -74,6 +74,14 @@ public final class GlassRenderTypes
     public static final RenderPipeline CLOAK_SCREEN_PIPELINE = screenPipeline("glass_cloak_screen", true, false, true);
     public static final RenderPipeline CLOAK_SCREEN_NO_CULL_PIPELINE = screenPipeline("glass_cloak_screen_no_cull", false, false, true);
 
+    /** Distant Horizons' clouds, copied into a view (see DistantHorizonsClouds): flat coloured boxes. */
+    public static final RenderPipeline DH_CLOUDS_PIPELINE = RenderPipeline.builder(RenderPipelines.DEBUG_FILLED_SNIPPET)
+            .withLocation(Glass.id("pipeline/glass_dh_clouds"))
+            .withCull(false)
+            .build();
+    public static final RenderType DH_CLOUDS = RenderType.create("glass_dh_clouds", 1536, false, false, DH_CLOUDS_PIPELINE,
+            RenderType.CompositeState.builder().createCompositeState(false));
+
     public static final RenderType PLANES = RenderType.create("glass_planes", 1536, false, true, PLANES_PIPELINE,
             RenderType.CompositeState.builder().createCompositeState(false));
     public static final RenderType PLANES_NO_CULL = RenderType.create("glass_planes_no_cull", 1536, false, true, PLANES_NO_CULL_PIPELINE,

@@ -130,6 +130,11 @@ public class GlassClientGameTest implements FabricClientGameTest
             field.fieldHeight = 10;
             field.sync();
         });
+        if("cloudwall".equals(System.getenv("GLASS_TEST_ONLY")))
+        {
+            cloudWall(singleplayer, context, server);
+            return;
+        }
         server.runCommand("tp @p -58 -60 70 180 5");
         settle(singleplayer, context);
         server.runCommand("setblock -66 -61 50 minecraft:redstone_block");
@@ -383,6 +388,41 @@ public class GlassClientGameTest implements FabricClientGameTest
         return (GlassTerminalBlockEntity)server.overworld().getBlockEntity(pos);
     }
 
+    /**
+     * GLASS_TEST_ONLY=cloudwall: right outside the field's south wall, looking up along it, so the wall's view (while it
+     * rises) covers the clouds behind it. Shows whether the clouds are drawn in a wall's view.
+     */
+    private static void cloudWall(TestSingleplayerContext singleplayer, ClientGameTestContext context, TestServerContext server)
+    {
+        server.runCommand("gamemode spectator @p");
+        context.runOnClient(mc -> {
+            mc.options.hideGui = true;
+            //The test setup turns Minecraft's clouds off; GLASS_CLOUDS=vanilla turns them on (Distant Horizons draws its own).
+            if("vanilla".equals(System.getenv("GLASS_CLOUDS")))
+            {
+                mc.options.cloudStatus().set(net.minecraft.client.CloudStatus.FANCY);
+            }
+        });
+        //Two views: looking along the wall like a player does (low, a few blocks off), and steeply up close to it.
+        String[][] spots = { { "low", "-58 -59 55.5 180 -12" }, { "steep", "-58 -60 49.5 180 -45" } };
+        for(String[] spot : spots)
+        {
+            server.runCommand("setblock -66 -61 50 minecraft:air");
+            server.runCommand("tp @p " + spot[1]);
+            context.waitTicks(100);
+            settle(singleplayer, context);
+            context.takeScreenshot("cloudwall_" + spot[0] + "_before");
+            server.runCommand("setblock -66 -61 50 minecraft:redstone_block");
+            for(int t = 0; t <= 40; t += 8)
+            {
+                context.takeScreenshot(String.format("cloudwall_%s_t%02d", spot[0], t));
+                context.waitTicks(8);
+            }
+            context.waitTicks(40);
+            context.takeScreenshot("cloudwall_" + spot[0] + "_on");
+        }
+    }
+
     /** Makes a channel at the terminal at {@code pos}, like the camera screen does. Returns its id. */
     private static String create(MinecraftServer server, BlockPos pos, String name, String password)
     {
@@ -437,7 +477,7 @@ public class GlassClientGameTest implements FabricClientGameTest
                 cloakOnly(singleplayer, context, server);
                 return;
             }
-            if("cloak".equals(System.getenv("GLASS_TEST_ONLY")))
+            if("cloak".equals(System.getenv("GLASS_TEST_ONLY")) || "cloudwall".equals(System.getenv("GLASS_TEST_ONLY")))
             {
                 cloakOnly(singleplayer, context, server);
                 return;
