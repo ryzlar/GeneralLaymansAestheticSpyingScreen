@@ -170,6 +170,11 @@ public class GlassClientGameTest implements FabricClientGameTest
             mapPosts(singleplayer, context, server);
             return;
         }
+        if("journeymap".equals(System.getenv("GLASS_TEST_ONLY")))
+        {
+            journeyMap(singleplayer, context, server);
+            return;
+        }
         server.runCommand("tp @p -58 -60 70 180 5");
         settle(singleplayer, context);
         server.runCommand("setblock -66 -61 50 minecraft:redstone_block");
@@ -539,11 +544,8 @@ public class GlassClientGameTest implements FabricClientGameTest
         check(box.contains("-60.0") && box.contains("-50.0"), "the field starts at the ground (-60) and rises 10 blocks (-50): " + box);
     }
 
-    /**
-     * GLASS_TEST_ONLY=mapposts (with Xaero's Minimap and World Map): the field on posts with a dark oak build inside, as
-     * in a real world. Seen from outside on the minimap while it switches on and off, and on the World Map.
-     */
-    private static void mapPosts(TestSingleplayerContext singleplayer, ClientGameTestContext context, TestServerContext server)
+    /** The field on posts three blocks up with a dark oak build inside (see mapPosts). */
+    private static void postsBuild(ClientGameTestContext context, TestServerContext server)
     {
         String id = "generallaymansaestheticspyingscreen:";
         int[][] corners = { { -62, 38 }, { -54, 38 }, { -62, 46 }, { -54, 46 } };
@@ -564,6 +566,68 @@ public class GlassClientGameTest implements FabricClientGameTest
             field.fieldHeight = 10;
             field.sync();
         });
+    }
+
+    /**
+     * GLASS_TEST_ONLY=journeymap (with JourneyMap): the build of mapPosts seen from outside on JourneyMap's minimap (zoomed
+     * in) and full-screen map, while the field is off, on, and off again.
+     */
+    private static void journeyMap(TestSingleplayerContext singleplayer, ClientGameTestContext context, TestServerContext server)
+    {
+        postsBuild(context, server);
+        server.runCommand("tp @p -58 -60 66 180 30");
+        context.waitTicks(100);
+        settle(singleplayer, context);
+        java.util.List<String> keys = context.computeOnClient(mc -> java.util.Arrays.stream(mc.options.keyMappings)
+                .map(net.minecraft.client.KeyMapping::getName).filter(n -> n.contains("journeymap")).toList());
+        LOGGER.info("journeymap keys: {}", keys);
+        java.util.function.Function<String, java.util.function.Function<net.minecraft.client.Options, net.minecraft.client.KeyMapping>> key =
+                part -> options -> java.util.Arrays.stream(options.keyMappings).filter(k -> k.getName().contains("journeymap") && k.getName().contains(part))
+                        .findFirst().orElseThrow(() -> new IllegalStateException("no journeymap key with " + part + " in " + keys));
+        //The first time the full-screen map opens, JourneyMap shows its "about" screen: opened once and closed beforehand.
+        context.getInput().pressKey(key.apply("map_toggle"));
+        context.waitTicks(20);
+        context.runOnClient(mc -> mc.setScreen(null));
+        context.getInput().pressKey(key.apply("zoom_in"));
+        context.waitTicks(100);
+        context.takeScreenshot("jm_off");
+        fullMap(context, key, "jm_full_off");
+        server.runCommand("setblock -66 -61 50 minecraft:redstone_block");
+        for(int t = 0; t <= 40; t += 10)
+        {
+            context.takeScreenshot(String.format("jm_on_t%02d", t));
+            context.waitTicks(10);
+        }
+        context.waitTicks(100);
+        context.takeScreenshot("jm_on");
+        fullMap(context, key, "jm_full_on");
+        server.runCommand("setblock -66 -61 50 minecraft:air");
+        for(int t = 0; t <= 40; t += 10)
+        {
+            context.takeScreenshot(String.format("jm_off_t%02d", t));
+            context.waitTicks(10);
+        }
+        context.waitTicks(100);
+        context.takeScreenshot("jm_off_again");
+        fullMap(context, key, "jm_full_off_again");
+    }
+
+    /** JourneyMap's full-screen map (the field at the top), in a screenshot. */
+    private static void fullMap(ClientGameTestContext context, java.util.function.Function<String, java.util.function.Function<net.minecraft.client.Options, net.minecraft.client.KeyMapping>> key, String name)
+    {
+        context.getInput().pressKey(key.apply("map_toggle"));
+        context.waitTicks(60);
+        context.takeScreenshot(name);
+        context.runOnClient(mc -> mc.setScreen(null));
+    }
+
+    /**
+     * GLASS_TEST_ONLY=mapposts (with Xaero's Minimap and World Map): the field on posts with a dark oak build inside, as
+     * in a real world. Seen from outside on the minimap while it switches on and off, and on the World Map.
+     */
+    private static void mapPosts(TestSingleplayerContext singleplayer, ClientGameTestContext context, TestServerContext server)
+    {
+        postsBuild(context, server);
         server.runCommand("tp @p -58 -60 66 180 30");
         context.waitTicks(100);
         settle(singleplayer, context);
@@ -888,7 +952,7 @@ public class GlassClientGameTest implements FabricClientGameTest
                     || "minimap".equals(System.getenv("GLASS_TEST_ONLY")) || "fieldwalk".equals(System.getenv("GLASS_TEST_ONLY"))
                     || "screens".equals(System.getenv("GLASS_TEST_ONLY")) || "fieldposts".equals(System.getenv("GLASS_TEST_ONLY"))
                     || "worldmap".equals(System.getenv("GLASS_TEST_ONLY")) || "mapposts".equals(System.getenv("GLASS_TEST_ONLY"))
-                    || "userbuild".equals(System.getenv("GLASS_TEST_ONLY")))
+                    || "userbuild".equals(System.getenv("GLASS_TEST_ONLY")) || "journeymap".equals(System.getenv("GLASS_TEST_ONLY")))
             {
                 cloakOnly(singleplayer, context, server);
                 return;

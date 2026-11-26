@@ -20,6 +20,8 @@
     "DistantHorizonsCloudsMixin",
     "XaeroMinimapMixin",
     "XaeroWorldMapMixin",
+    "JourneyMapChunkMixin",
+    "JourneyMapHeightMixin",
     "LevelRendererCloakWallMixin",
     "LevelWeatherMixin",
     "LivingEntityRendererMixin",

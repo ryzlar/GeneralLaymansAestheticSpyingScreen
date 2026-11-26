@@ -106,6 +106,25 @@ dependencies {
 		// ./gradlew runClient -PwithXaero also brings Xaero's World Map (it maps the world too).
 		modLocalRuntime "maven.modrinth:xaeros-world-map:${project.xaero_worldmap_version}"
 	}
+	// ./gradlew runClient -PwithJM: JourneyMap (maps the blocks around the player too, so a cloak could show on it).
+	if(project.hasProperty("withJM")) {
+		modLocalRuntime "maven.modrinth:journeymap:${project.journeymap_version}"
+		// JourneyMap carries its API, Common Network and PNGJ inside its jar, which the development copy leaves out (it
+		// did not start without them): take them out into a local folder and add them, as with XaeroLib above.
+		def journeyMap = configurations.detachedConfiguration(dependencies.create("maven.modrinth:journeymap:${project.journeymap_version}")).singleFile
+		def jmLibDir = layout.buildDirectory.dir("jmlibs").get().asFile
+		def jmLibs = zipTree(journeyMap).matching { include "META-INF/jars/*.jar" }.files
+		copy {
+			from jmLibs
+			into jmLibDir
+		}
+		repositories {
+			flatDir {
+				dirs jmLibDir
+			}
+		}
+		jmLibs.each { lib -> modLocalRuntime ":${lib.name.replaceAll(/\.jar$/, "")}" }
+	}
 }
 
 // Release checks with the real (remapped) jar, as players get it: ./gradlew prodServer, ./gradlew prodClient
@@ -130,6 +149,9 @@ dependencies {
 	if(project.hasProperty("withXaero")) {
 		prodMods "maven.modrinth:xaeros-minimap:${project.xaero_minimap_version}"
 		prodMods "maven.modrinth:xaeros-world-map:${project.xaero_worldmap_version}"
+	}
+	if(project.hasProperty("withJM")) {
+		prodMods "maven.modrinth:journeymap:${project.journeymap_version}"
 	}
 }
 
