@@ -120,12 +120,23 @@ public abstract class HoloScreen extends Screen
         GlassNetworking.ActionResult result = GlassNetClient.recentResult(RESULT_SHOW_MILLIS);
         if(localMessage != null)
         {
-            g.drawString(font, Component.literal("⚠ ").append(localMessage), left + 10, top + panelH - 13, Holo.WARN, false);
+            message(g, Component.literal("⚠ ").append(localMessage), Holo.WARN);
         }
         else if(result != null)
         {
-            Component text = Component.literal(result.ok() ? "▶ " : "⚠ ").append(GlassNetClient.describe(result));
-            g.drawString(font, text, left + 10, top + panelH - 13, result.ok() ? Holo.OK : Holo.ERROR, false);
+            message(g, Component.literal(result.ok() ? "▶ " : "⚠ ").append(GlassNetClient.describe(result)), result.ok() ? Holo.OK : Holo.ERROR);
+        }
+    }
+
+    /** The message at the bottom of the panel, wrapped to fit inside its margins (a longer one goes up a line). */
+    private void message(GuiGraphics g, Component text, int colour)
+    {
+        var lines = font.split(text, panelW - 20);
+        int y = top + panelH - 13 - (lines.size() - 1) * 10;
+        for(var line : lines)
+        {
+            g.drawString(font, line, left + 10, y, colour, false);
+            y += 10;
         }
     }
 
