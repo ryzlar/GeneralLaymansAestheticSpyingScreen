@@ -205,7 +205,7 @@ public class SceneSelectorScreen extends HoloScreen
         }
         else
         {
-            g.drawString(font, Component.translatable("glass.ui.selector.unlinked"), left + 12, top + 182, Holo.withAlpha(Holo.WARN, 0.5F + 0.5F * Holo.pulse(5F)), false);
+            g.drawString(font, Component.translatable("glass.ui.selector.unlinked"), left + 12, top + 182, Holo.WARN, false);
         }
         g.drawString(font, Component.translatable("glass.ui.redstoneHint"), left + 12, top + 195, Holo.MUTED, false);
     }

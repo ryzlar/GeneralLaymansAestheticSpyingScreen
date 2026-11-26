@@ -102,15 +102,9 @@ public abstract class HoloScreen extends Screen
     @Override
     public void renderBackground(GuiGraphics g, int mouseX, int mouseY, float partialTick)
     {
-        g.fill(0, 0, width, height, 0xB0010509);
-        for(int gx = (width / 2) % 24; gx < width; gx += 24)
-        {
-            g.fill(gx, 0, gx + 1, height, 0x0A3CE6FF);
-        }
-        for(int gy = (height / 2) % 24; gy < height; gy += 24)
-        {
-            g.fill(0, gy, width, gy + 1, 0x0A3CE6FF);
-        }
+        //The game dimmed and blurred behind the panel, as vanilla's menus do.
+        renderBlurredBackground(g);
+        g.fill(0, 0, width, height, 0x70010509);
         Holo.panel(g, left, top, panelW, panelH, age() / 0.18F);
     }
 

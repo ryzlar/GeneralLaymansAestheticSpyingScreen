@@ -94,7 +94,7 @@ public class HoloProjectorScreen extends HoloScreen
         else
         {
             g.drawString(font, font.plainSubstrByWidth(Component.translatable("glass.ui.holo.noCrystal").getString(), 92), lx, top + 54,
-                    Holo.withAlpha(Holo.WARN, 0.5F + 0.5F * Holo.pulse(5F)), false);
+                    Holo.WARN, false);
         }
         Holo.label(g, font, Component.translatable("glass.ui.holo.look"), lx, top + 76);
         Holo.label(g, font, Component.translatable("glass.ui.holo.scale"), lx, top + 96);

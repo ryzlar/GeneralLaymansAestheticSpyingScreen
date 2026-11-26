@@ -45,13 +45,20 @@ public class HoloButton extends Button
         int w = getWidth();
         int h = getHeight();
 
-        g.fill(x, y, x + w, y + h, !active ? 0x88050C10 : hot ? Holo.withAlpha(accent, 0.22F) : 0xCC07141C);
-        Holo.frame(g, x, y, w, h, !active ? 0xFF1C2D33 : hot ? accent : Holo.withAlpha(accent, 0.55F));
+        //Flat: a dark tile, lit cyan when hovered or on; a thin edge only then.
+        int fill = !active ? 0x66091116 : hot ? Holo.withAlpha(accent, 0.18F) : 0xFF13242D;
+        g.fill(x + 1, y, x + w - 1, y + h, fill);
+        g.fill(x, y + 1, x + 1, y + h - 1, fill);
+        g.fill(x + w - 1, y + 1, x + w, y + h - 1, fill);
         if(hot)
         {
-            g.fill(x + 2, y + h - 2, x + w - 2, y + h - 1, accent);
+            Holo.frame(g, x, y, w, h, Holo.withAlpha(accent, 0.7F));
         }
-        int textColour = !active ? 0xFF3E5A62 : hot ? 0xFFFFFFFF : (danger ? Holo.ERROR : Holo.TEXT);
+        else if(active)
+        {
+            Holo.frame(g, x, y, w, h, danger ? Holo.withAlpha(accent, 0.35F) : 0xFF1F3B45);
+        }
+        int textColour = !active ? 0xFF41575E : hot ? 0xFFFFFFFF : (danger ? Holo.ERROR : Holo.TEXT);
         var font = Minecraft.getInstance().font;
         g.drawCenteredString(font, getMessage(), x + w / 2, y + (h - 8) / 2, textColour);
     }
