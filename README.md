@@ -77,6 +77,8 @@ The exact grids are in the GLASS Tome (and in any recipe viewer).
 - **Sodium** 0.7 works, screens and cloaks included. **Iris** works too, cloaks included even with a shader pack on
   (with their own nano animation); while a shader pack is on, screens show a glow instead of the camera image (you are
   told when you join).
+- **Distant Horizons** works: its far terrain stays out of cloaks, and the camera image keeps its clouds.
+- **Xaero's Minimap** and **Xaero's World Map** work: a cloaked build does not show on the map from outside the cloak.
 
 ### Server settings
 
@@ -110,8 +112,9 @@ GLASS is licensed under the **GNU Lesser General Public License v3.0**, and so i
 - Modified versions of it must stay under the LGPL v3 (or the GPL v3) and keep these notices.
 
 Built with [Fabric API](https://github.com/FabricMC/fabric) (Apache 2.0), which is not included in the jar.
-[Sodium](https://github.com/CaffeineMC/sodium) and [Iris](https://github.com/IrisShaders/Iris) are supported but not
-included.
+[Sodium](https://github.com/CaffeineMC/sodium), [Iris](https://github.com/IrisShaders/Iris),
+[Distant Horizons](https://modrinth.com/mod/distanthorizons), [Xaero's Minimap](https://modrinth.com/mod/xaeros-minimap)
+and [Xaero's World Map](https://modrinth.com/mod/xaeros-world-map) are supported but not included.
 
 ## Changes from the original
 
@@ -144,7 +147,8 @@ Tests:
   `GLASS_TEST_ONLY=stress` runs the stress test (many cloaks, a dedicated server joined twice, a scan bigger than one
   packet).
 - `./gradlew prodServer` / `./gradlew prodClient`: the built jar as players get it, on a real server or client.
-- Add `-PwithSodium` or `-PwithIris` to a client run to try it with Sodium or Iris.
+- Add `-PwithSodium`, `-PwithIris`, `-PwithDH` or `-PwithXaero` to a client run to try it with Sodium, Iris,
+  Distant Horizons or Xaero's Minimap and World Map.
 
 The GLASS Tome's pages are written by `tools/tome_pages.py`, the icon and the tome's texture by
 `tools/make_icon.py` and `tools/make_tome_texture.py`.

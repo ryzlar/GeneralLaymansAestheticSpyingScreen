@@ -152,7 +152,7 @@ public class TabletScreen extends HoloScreen
         int x = left + 10, y = top + 40, w = panelW - 20, h = panelH - 78;
         Holo.inset(g, x, y, w, h);
         drawView(g, x + 1, y + 1, w - 2, h - 2, partialTick);
-        Holo.brackets(g, x - 2, y - 2, w + 4, h + 4, 8, Holo.ACCENT);
+        Holo.frame(g, x - 1, y - 1, w + 2, h + 2, Holo.EDGE);
     }
 
     private void drawView(GuiGraphics g, int x, int y, int w, int h, float partialTick)

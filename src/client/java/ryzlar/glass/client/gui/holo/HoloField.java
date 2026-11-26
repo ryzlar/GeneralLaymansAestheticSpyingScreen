@@ -26,7 +26,7 @@ public class HoloField extends EditBox
         int w = getWidth() + PAD * 2;
         int h = 16;
         g.fill(x, y, x + w, y + h, Holo.FIELD);
-        Holo.frame(g, x, y, w, h, isFocused() ? Holo.ACCENT : Holo.ACCENT_DIM);
+        Holo.frame(g, x, y, w, h, isFocused() ? Holo.withAlpha(Holo.ACCENT, 0.8F) : 0xFF1C3A43);
         super.renderWidget(g, mouseX, mouseY, partialTick);
     }
 

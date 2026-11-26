@@ -117,6 +117,8 @@ public final class CloakHider
 
     /** What the chunk builders read, from their own threads: replaced as a whole, never changed. */
     private static volatile Hidden[] active = new Hidden[0];
+    /** The hidden boxes of cloak fields that hide their whole build from the eye right now (see {@link CloakWall}). */
+    private static volatile AABB[] fieldWalls = new AABB[0];
 
     /** A cloak that hides (or is about to): its hidden parts, and since when. */
     private static final class Cloak
@@ -223,6 +225,12 @@ public final class CloakHider
         return false;
     }
 
+    /** The hidden boxes of cloak fields that hide their whole build from the eye right now (fully on, not switching). */
+    public static AABB[] fieldWalls()
+    {
+        return fieldWalls;
+    }
+
     // ---- Asked by the glass renderer ----
 
     /**
@@ -241,6 +249,7 @@ public final class CloakHider
     /** A block changed on the client: a cloak whose made-up ground was worked out from it works it out again. */
     public static void blockChanged(BlockPos pos)
     {
+        CloakMapHider.blockChanged(pos);
         if(CLOAKS.isEmpty())
         {
             return;
@@ -403,6 +412,7 @@ public final class CloakHider
         CLOAKS.clear();
         CLOAKS.putAll(wanted);
         publish(mc, level);
+        CloakMapHider.tick(mc, level);
     }
 
     /** How long a cloak takes to switch on: the field's walls rising, or the nano wave reaching the far glass, in ticks. */
@@ -465,7 +475,7 @@ public final class CloakHider
     }
 
     /** The cloak's sides that hide something: a field's whole box (one side's view of it), or each side the glass faces. */
-    private static List<TerminalPlacement> sides(GlassProjectorBlockEntity master, TerminalPlacement placement)
+    static List<TerminalPlacement> sides(GlassProjectorBlockEntity master, TerminalPlacement placement)
     {
         if(master.cloakFieldBox() != null)
         {
@@ -556,6 +566,18 @@ public final class CloakHider
             }
             now.addAll(cloak.published);
         }
+        List<AABB> walls = new ArrayList<>();
+        for(Cloak cloak : CLOAKS.values())
+        {
+            if(cloak.master.cloakFieldBox() != null && cloak.shown == STEADY)
+            {
+                for(Hidden part : cloak.parts)
+                {
+                    walls.add(part.hidden());
+                }
+            }
+        }
+        fieldWalls = walls.toArray(new AABB[0]);
         Hidden[] before = active;
         if(sameParts(before, now))
         {
@@ -684,5 +706,8 @@ public final class CloakHider
     {
         CLOAKS.clear();
         active = new Hidden[0];
+        fieldWalls = new AABB[0];
+        CloakWall.clear();
+        CloakMapHider.clear();
     }
 }

@@ -1,0 +1,54 @@
+# Publishes every GitHub release to Modrinth (GLASS 2) as a new version: the jar attached to the release (built and
+# tested locally, so Modrinth gets exactly that file), the release's title as the version name and its notes as the
+# changelog. Needs the repository secret MODRINTH_TOKEN (a Modrinth personal access token with "Create versions").
+name: Publish to Modrinth
+
+on:
+  release:
+    types: [published]
+  # Run it again by hand for a release (e.g. if the token was missing): Actions > Publish to Modrinth > Run workflow.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish (e.g. v1.2.0)"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  modrinth:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get the release's jar
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          mkdir dist
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "*.jar" --dir dist
+          rm -f dist/*-sources.jar
+          ls -l dist
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json name,body > release.json
+          jar=$(ls dist/*.jar | head -n 1)
+          version=$(basename "$jar" .jar | sed 's/^GeneralLaymansAestheticSpyingScreen-//')
+          echo "JAR=$jar" >> "$GITHUB_ENV"
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          echo "NAME=$(jq -r .name release.json)" >> "$GITHUB_ENV"
+          jq -r .body release.json > changelog.md
+
+      - name: Publish to Modrinth
+        uses: Kir-Antipov/mc-publish@v3.3
+        with:
+          modrinth-id: NZIsSa4Q
+          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
+          files: ${{ env.JAR }}
+          name: ${{ env.NAME }}
+          version: ${{ env.VERSION }}
+          version-type: release
+          changelog-file: changelog.md
+          loaders: fabric
+          game-versions: 1.21.8
+          dependencies: |
+            fabric-api(required)
+          java: 21

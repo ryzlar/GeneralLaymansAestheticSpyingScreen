@@ -28,7 +28,9 @@ import java.util.Random;
 /**
  * Orders the wireless extensions a projector draws its floating screen between, with a rotating wireframe preview
  * (drag to rotate, scroll to zoom, click a corner to select it). Port of GuiWirelessOrder, extended with an analysis of
- * the triangle strip the projector draws (overlap, coverage, size), an auto-order that finds a clean strip, and undo.
+ * the triangle strip the projector draws (overlap, coverage, size), and easier ways to order: drag rows in the list
+ * (the preview follows), click the extensions in the preview one by one ("Click order"), or let it order them (best fit,
+ * zigzag, nearest next), with undo.
  */
 public class WirelessOrderScreen extends HoloScreen
 {
@@ -48,6 +50,12 @@ public class WirelessOrderScreen extends HoloScreen
     private HoloButton autoButton;
     private HoloButton saveButton;
     private HoloButton fillButton;
+    private HoloButton pickButton;
+    private final List<HoloButton> autoChoices = new ArrayList<>();
+    private boolean autoMenu;
+    /** Click order: on, and the extensions clicked so far (in that order). */
+    private boolean picking;
+    private final List<BlockPos> picked = new ArrayList<>();
 
     private float rotateX = 0F;
     private float rotateY = 0F;
@@ -82,16 +90,36 @@ public class WirelessOrderScreen extends HoloScreen
         list.setItems(order);
         list.selectIndex(selected);
 
+        list.onReorder((from, to) -> {
+            remember();
+            order.add(to, order.remove(from.intValue()));
+            changed(to);
+        });
+
         int bx = left + 10;
-        addRenderableWidget(new HoloButton(bx, top + 164, 26, 14, Component.literal("▲"), b -> move(-1)));
-        addRenderableWidget(new HoloButton(bx + 28, top + 164, 26, 14, Component.literal("▼"), b -> move(1)));
-        addRenderableWidget(new HoloButton(bx + 56, top + 164, 26, 14, Component.literal("⇅"), b -> reverse()));
+        addRenderableWidget(new HoloButton(bx, top + 164, 80, 14, Component.translatable("glass.ui.reverse"), b -> reverse()));
         addRenderableWidget(new HoloButton(bx + 84, top + 164, 80, 14, Component.translatable("glass.ui.remove"), b -> removeSelected(), true));
-        autoButton = addRenderableWidget(new HoloButton(bx, top + 181, 80, 14, Component.translatable("glass.ui.autoOrder"), b -> autoOrder()));
-        undoButton = addRenderableWidget(new HoloButton(bx + 82, top + 181, 40, 14, Component.translatable("glass.ui.undo"), b -> undo()));
-        revertButton = addRenderableWidget(new HoloButton(bx + 124, top + 181, 40, 14, Component.translatable("glass.ui.revert"), b -> revert()));
+        autoButton = addRenderableWidget(new HoloButton(bx, top + 181, 80, 14, Component.translatable("glass.ui.autoOrder"), b -> {
+            autoMenu = !autoMenu;
+            updateButtons();
+        }));
+        undoButton = addRenderableWidget(new HoloButton(bx + 84, top + 181, 38, 14, Component.translatable("glass.ui.undo"), b -> undo()));
+        revertButton = addRenderableWidget(new HoloButton(bx + 126, top + 181, 38, 14, Component.translatable("glass.ui.revert"), b -> revert()));
+        //Auto-order's choices, shown under it when it is clicked.
+        autoChoices.clear();
+        String[] choices = { "glass.ui.auto.best", "glass.ui.auto.zigzag", "glass.ui.auto.nearest" };
+        for(int i = 0; i < choices.length; i++)
+        {
+            int choice = i;
+            HoloButton option = new HoloButton(bx, top + 197 + i * 15, 120, 14, Component.translatable(choices[i]), b -> {
+                autoMenu = false;
+                autoOrder(choice);
+            });
+            autoChoices.add(addRenderableWidget(option));
+        }
 
         int px = previewX() + previewW();
+        pickButton = addRenderableWidget(new HoloButton(px - 130, top + 39, 72, 11, Component.translatable("glass.ui.clickOrder"), b -> togglePicking()));
         fillButton = addRenderableWidget(new HoloButton(px - 54, top + 39, 34, 11, Component.translatable("glass.ui.fill"), b -> fill = !fill));
         addRenderableWidget(new HoloButton(px - 18, top + 39, 18, 11, Component.literal("⟲"), b -> resetView()));
 
@@ -106,8 +134,19 @@ public class WirelessOrderScreen extends HoloScreen
         saveButton.active = !master.active && dirty;
         revertButton.active = dirty;
         undoButton.active = !history.isEmpty();
-        autoButton.active = order.size() >= 3 && order.size() <= AUTO_MAX;
+        autoButton.active = order.size() >= 3;
+        autoButton.selected(autoMenu);
+        for(int i = 0; i < autoChoices.size(); i++)
+        {
+            HoloButton option = autoChoices.get(i);
+            option.visible = autoMenu;
+            option.active = autoMenu && (i != 0 || order.size() <= AUTO_MAX);
+        }
         fillButton.selected(fill);
+        pickButton.active = order.size() >= 2;
+        pickButton.selected(picking);
+        pickButton.setMessage(picking ? Component.translatable("glass.ui.clickOrder.done", picked.size(), order.size())
+                : Component.translatable("glass.ui.clickOrder"));
     }
 
     private boolean isDirty()
@@ -210,13 +249,111 @@ public class WirelessOrderScreen extends HoloScreen
         }
     }
 
+    /** Auto-order: 0 best fit (tries every order), 1 zigzag along the screen, 2 nearest next from the projector. */
+    private void autoOrder(int choice)
+    {
+        if(order.size() < 3)
+        {
+            return;
+        }
+        List<BlockPos> sorted = choice == 1 ? zigzag() : choice == 2 ? nearestNext() : bestFit();
+        if(sorted != null && !sorted.equals(order))
+        {
+            BlockPos selected = list.getSelected();
+            remember();
+            order = sorted;
+            changed(selected == null ? -1 : order.indexOf(selected));
+        }
+        updateButtons();
+    }
+
+    /**
+     * Along the screen's longer side, alternating between its two sides: (0,1,2), (1,2,3)... then step across it
+     * without crossing back, which is a clean strip for most shapes and any number of extensions.
+     */
+    private List<BlockPos> zigzag()
+    {
+        float[][] flat = flatten(points3d(order));
+        int n = order.size();
+        float minU = Float.MAX_VALUE, maxU = -Float.MAX_VALUE, minV = Float.MAX_VALUE, maxV = -Float.MAX_VALUE;
+        for(int i = 1; i <= n; i++)
+        {
+            minU = Math.min(minU, flat[i][0]);
+            maxU = Math.max(maxU, flat[i][0]);
+            minV = Math.min(minV, flat[i][1]);
+            maxV = Math.max(maxV, flat[i][1]);
+        }
+        int along = maxU - minU >= maxV - minV ? 0 : 1;
+        int across = 1 - along;
+        float middle = 0F;
+        for(int i = 1; i <= n; i++)
+        {
+            middle += flat[i][across];
+        }
+        middle /= n;
+        List<Integer> low = new ArrayList<>(), high = new ArrayList<>();
+        for(int i = 0; i < n; i++)
+        {
+            (flat[i + 1][across] < middle ? low : high).add(i);
+        }
+        java.util.Comparator<Integer> byAlong = (x, y) -> Float.compare(flat[x + 1][along], flat[y + 1][along]);
+        low.sort(byAlong);
+        high.sort(byAlong);
+        //Start on the side nearer the projector, and from the end nearer it.
+        boolean flip = flat[0][along] > (along == 0 ? (minU + maxU) / 2F : (minV + maxV) / 2F);
+        if(flip)
+        {
+            Collections.reverse(low);
+            Collections.reverse(high);
+        }
+        List<Integer> first = flat[0][across] < middle ? low : high;
+        List<Integer> second = first == low ? high : low;
+        List<BlockPos> sorted = new ArrayList<>();
+        for(int i = 0; i < Math.max(first.size(), second.size()); i++)
+        {
+            if(i < first.size())
+            {
+                sorted.add(order.get(first.get(i)));
+            }
+            if(i < second.size())
+            {
+                sorted.add(order.get(second.get(i)));
+            }
+        }
+        return sorted;
+    }
+
+    /** From the projector, always on to the nearest extension not yet used. */
+    private List<BlockPos> nearestNext()
+    {
+        List<BlockPos> left = new ArrayList<>(order);
+        List<BlockPos> sorted = new ArrayList<>();
+        BlockPos at = master.getBlockPos();
+        while(!left.isEmpty())
+        {
+            BlockPos nearest = left.get(0);
+            for(BlockPos pos : left)
+            {
+                if(pos.distSqr(at) < nearest.distSqr(at))
+                {
+                    nearest = pos;
+                }
+            }
+            sorted.add(nearest);
+            left.remove(nearest);
+            at = nearest;
+        }
+        return sorted;
+    }
+
     /** Tries every order and keeps the one whose strip overlaps least and covers most (the current one wins ties). */
-    private void autoOrder()
+    @Nullable
+    private List<BlockPos> bestFit()
     {
         int n = order.size();
         if(n < 3 || n > AUTO_MAX)
         {
-            return;
+            return null;
         }
         float[][] flat = flatten(points3d(order));
         int[] perm = new int[n];
@@ -236,13 +373,59 @@ public class WirelessOrderScreen extends HoloScreen
         {
             sorted.add(order.get(i));
         }
-        if(!sorted.equals(order))
+        return sorted;
+    }
+
+    /** Click order: on, it collects the extensions clicked in the preview; off again (or all clicked), it uses them. */
+    private void togglePicking()
+    {
+        if(picking)
         {
-            BlockPos selected = list.getSelected();
-            remember();
-            order = sorted;
-            changed(selected == null ? -1 : order.indexOf(selected));
+            finishPicking();
+            return;
         }
+        picking = true;
+        picked.clear();
+        updateButtons();
+    }
+
+    private void finishPicking()
+    {
+        picking = false;
+        if(!picked.isEmpty())
+        {
+            //Those not clicked keep their order, after the clicked ones.
+            List<BlockPos> sorted = new ArrayList<>(picked);
+            for(BlockPos pos : order)
+            {
+                if(!sorted.contains(pos))
+                {
+                    sorted.add(pos);
+                }
+            }
+            if(!sorted.equals(order))
+            {
+                remember();
+                order = sorted;
+                changed(-1);
+            }
+        }
+        picked.clear();
+        updateButtons();
+    }
+
+    /** The order the preview shows: while a row is dragged, as it would be if let go now. */
+    private List<BlockPos> shownOrder()
+    {
+        int from = list.draggedIndex();
+        int to = list.dropIndex();
+        if(from < 0 || to < 0 || from == to)
+        {
+            return order;
+        }
+        List<BlockPos> shown = new ArrayList<>(order);
+        shown.add(to, shown.remove(from));
+        return shown;
     }
 
     private static void permute(float[][] flat, int[] perm, boolean[] used, int depth, int[] best, float[] bestScore)
@@ -410,9 +593,32 @@ public class WirelessOrderScreen extends HoloScreen
     public boolean mouseClicked(double mouseX, double mouseY, int button)
     {
         int point = button == 0 ? pointAt(mouseX, mouseY) : -1;
+        if(point > 0 && picking)
+        {
+            BlockPos pos = order.get(point - 1);
+            if(!picked.contains(pos))
+            {
+                picked.add(pos);
+                minecraft.getSoundManager().play(net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(ryzlar.glass.GlassSounds.UI_CLICK, 1.2F));
+                if(picked.size() == order.size())
+                {
+                    finishPicking();
+                }
+                else
+                {
+                    updateButtons();
+                }
+            }
+            return true;
+        }
         if(point > 0)
         {
             select(point - 1);
+        }
+        if(autoMenu && autoChoices.stream().noneMatch(o -> o.isMouseOver(mouseX, mouseY)) && !autoButton.isMouseOver(mouseX, mouseY))
+        {
+            autoMenu = false;
+            updateButtons();
         }
         return super.mouseClicked(mouseX, mouseY, button);
     }
@@ -450,6 +656,10 @@ public class WirelessOrderScreen extends HoloScreen
             return;
         }
         Holo.label(g, font, Component.translatable("glass.ui.extensions"), left + 10, top + 41);
+        if(order.size() > 1 && !autoMenu)
+        {
+            g.drawString(font, Component.translatable("glass.ui.dragHint"), left + 10, top + 199, Holo.MUTED, false);
+        }
         Holo.label(g, font, Component.translatable("glass.ui.preview"), previewX(), top + 41);
         int px = previewX();
         int py = previewY();
@@ -458,7 +668,7 @@ public class WirelessOrderScreen extends HoloScreen
         Holo.inset(g, px, py, pw, ph);
         if(order.size() > 1)
         {
-            List<Vector3f> points = points3d(order);
+            List<Vector3f> points = points3d(shownOrder());
             Analysis analysis = analyse(flatten(points));
             g.enableScissor(px + 1, py + 1, px + pw - 1, py + ph - 1);
             drawPreview(g, points, analysis, partialTick, mouseX, mouseY);
@@ -470,9 +680,9 @@ public class WirelessOrderScreen extends HoloScreen
             drawnPoints = new float[0][];
             g.drawCenteredString(font, Component.translatable("glass.ui.needTwo"), px + pw / 2, py + ph / 2 - 4, 0xFF3E6670);
         }
-        if(isDirty())
+        if(isDirty() && !autoMenu)
         {
-            g.drawString(font, Component.translatable("glass.ui.unsaved"), left + 10, top + panelH - 30, Holo.withAlpha(Holo.WARN, 0.6F + 0.4F * Holo.pulse(5F)), false);
+            g.drawString(font, Component.translatable("glass.ui.unsaved"), left + 10, top + panelH - 30, Holo.WARN, false);
         }
     }
 
@@ -546,7 +756,7 @@ public class WirelessOrderScreen extends HoloScreen
         for(int i = 0; i < points.length; i++)
         {
             Vector3f v = m.transformPosition(new Vector3f(points3d.get(i)));
-            points[i] = new float[] { v.x, v.y, i == 0 ? Holo.ACCENT : colourOf(order.get(i - 1)) };
+            points[i] = new float[] { v.x, v.y, i == 0 ? Holo.ACCENT : colourOf(shownOrder().get(i - 1)) };
         }
         drawnPoints = points;
 
@@ -559,7 +769,8 @@ public class WirelessOrderScreen extends HoloScreen
             }
         }
 
-        int selected = list.getSelectedIndex() + 1;
+        int selected = list.draggedIndex() >= 0 ? list.dropIndex() + 1 : list.getSelectedIndex() + 1;
+        int rowHover = list.draggedIndex() < 0 && list.hoveredIndex() >= 0 ? list.hoveredIndex() + 1 : -1;
         for(int i = 0; i + 1 < points.length; i++)
         {
             for(int j = i + 1; j <= i + 2 && j < points.length; j++)
@@ -576,18 +787,30 @@ public class WirelessOrderScreen extends HoloScreen
             int y = Math.round(points[i][1]);
             int colour = (int)points[i][2];
             g.fill(x - 1, y - 1, x + 2, y + 2, colour);
-            if(i == selected || i == hovered)
+            if(i == selected || i == hovered || i == rowHover)
             {
                 int ring = i == selected ? Holo.withAlpha(colour, 0.5F + 0.5F * Holo.pulse(6F)) : Holo.withAlpha(colour, 0.6F);
                 Holo.frame(g, x - 3, y - 3, 7, 7, ring);
             }
-            g.drawString(font, i == 0 ? "P" : String.valueOf(i), x + 4, y - 9, Holo.withAlpha(colour, 0.9F), false);
+            String name = i == 0 ? "P" : String.valueOf(i);
+            if(picking && i > 0)
+            {
+                //Click order: what has been clicked shows its new number, the rest a question mark.
+                int at = picked.indexOf(order.get(i - 1));
+                name = at >= 0 ? String.valueOf(at + 1) : "?";
+                colour = at >= 0 ? Holo.OK : Holo.MUTED;
+            }
+            g.drawString(font, name, x + 4, y - 9, Holo.withAlpha(colour, 0.9F), false);
         }
 
         if(hovered >= 0)
         {
             String text = hovered == 0 ? "P  " + posLabel(master.getBlockPos()) : "#" + hovered + "  " + posLabel(order.get(hovered - 1));
             g.drawString(font, text, px + 4, py + 4, Holo.TEXT, false);
+        }
+        else if(picking)
+        {
+            g.drawString(font, Component.translatable("glass.ui.clickOrder.hint"), px + 4, py + 4, Holo.OK, false);
         }
         else if(!hasClicked)
         {

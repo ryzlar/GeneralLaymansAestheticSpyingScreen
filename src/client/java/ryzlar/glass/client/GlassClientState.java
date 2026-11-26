@@ -391,7 +391,11 @@ public final class GlassClientState implements GlassClientBridge
         {
             return;
         }
-        playAt(master, ryzlar.glass.GlassSounds.NANO_DISSOLVE, 0.9F, master.cloak ? 0.85F : 1F);
+        if(!master.cloak)
+        {
+            //A cloak switches off silently.
+            playAt(master, ryzlar.glass.GlassSounds.NANO_DISSOLVE, 0.9F, 1F);
+        }
         long now = master.getLevel().getGameTime();
         List<GlassBaseBlockEntity> blocks = new ArrayList<>();
         double furthest = 0D;

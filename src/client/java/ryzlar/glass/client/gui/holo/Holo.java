@@ -8,19 +8,24 @@ import net.minecraft.util.ARGB;
 import net.minecraft.util.Mth;
 
 /**
- * The look of the GLASS screens: dark glass panels with cyan "holographic" lines, corner brackets and scanlines.
- * Everything is drawn in code, no textures.
+ * The look of the GLASS screens: one dark see-through glass panel with a thin cyan edge, plain titles, quiet labels,
+ * and cyan only where it matters (what is selected, hovered or on). Everything is drawn in code, no textures.
  */
 public final class Holo
 {
     public static final int ACCENT = 0xFF3CE6FF;
     public static final int ACCENT_DIM = 0xFF1A7C8C;
     public static final int ACCENT_FAINT = 0x333CE6FF;
-    public static final int PANEL = 0xEE06111A;
+    public static final int PANEL = 0xE80A141B;
+    /** The panel's edge, and a faint divider. */
+    public static final int EDGE = 0xFF1E4651;
+    public static final int DIVIDER = 0x332E8C9C;
     public static final int PANEL_LIGHT = 0xF00B1E2A;
     public static final int FIELD = 0xFF030B11;
     public static final int TEXT = 0xFFD9FBFF;
-    public static final int MUTED = 0xFF79A9B6;
+    public static final int MUTED = 0xFF7E9EA8;
+    /** Labels above fields and lists. */
+    public static final int LABEL = 0xFF9CC3CC;
     public static final int ERROR = 0xFFFF5C77;
     public static final int OK = 0xFF5CFFB0;
     public static final int WARN = 0xFFFFC857;
@@ -75,41 +80,44 @@ public final class Holo
         g.fillGradient(x + 1, Math.max(y + 1, sweepY - 12), x + w - 1, sweepY, 0x003CE6FF, 0x183CE6FF);
     }
 
-    /** A main panel: dark glass, thin frame, bright corner brackets, scanlines. {@code reveal} 0..1 animates it opening. */
+    /**
+     * A main panel: dark glass with a thin edge, its corners cut by a pixel, a faint cyan line along the top.
+     * {@code reveal} 0..1 fades it in as it opens.
+     */
     public static void panel(GuiGraphics g, int x, int y, int w, int h, float reveal)
     {
-        int shownH = Math.max(2, (int)(h * Mth.clamp(reveal, 0F, 1F)));
-        int top = y + (h - shownH) / 2;
-        g.fill(x, top, x + w, top + shownH, PANEL);
-        frame(g, x, top, w, shownH, ACCENT_DIM);
-        brackets(g, x, top, w, shownH, 8, ACCENT);
-        if(reveal >= 1F)
-        {
-            scanlines(g, x, y, w, h);
-        }
+        float r = Mth.clamp(reveal, 0F, 1F);
+        int lift = (int)((1F - r) * 4F);
+        y += lift;
+        g.fill(x + 1, y, x + w - 1, y + h, withAlpha(PANEL, r));
+        g.fill(x, y + 1, x + 1, y + h - 1, withAlpha(PANEL, r));
+        g.fill(x + w - 1, y + 1, x + w, y + h - 1, withAlpha(PANEL, r));
+        int edge = withAlpha(EDGE, r);
+        g.fill(x + 1, y, x + w - 1, y + 1, edge);
+        g.fill(x + 1, y + h - 1, x + w - 1, y + h, edge);
+        g.fill(x, y + 1, x + 1, y + h - 1, edge);
+        g.fill(x + w - 1, y + 1, x + w, y + h - 1, edge);
+        g.fillGradient(x + 1, y + 1, x + w - 1, y + 2, withAlpha(0x663CE6FF, r), withAlpha(0x003CE6FF, r));
     }
 
     /** A smaller inset box (lists, preview areas). */
     public static void inset(GuiGraphics g, int x, int y, int w, int h)
     {
-        g.fill(x, y, x + w, y + h, 0xCC02080D);
-        frame(g, x, y, w, h, 0xFF123F48);
+        g.fill(x, y, x + w, y + h, 0xAA04090D);
+        frame(g, x, y, w, h, 0xFF163640);
     }
 
-    /** Title bar: "GLASS//NET :: TITLE", a subtitle and a blinking status light. */
+    /** Title bar: the title, a quiet subtitle under it, and a faint line below. */
     public static void header(GuiGraphics g, Font font, int x, int y, int w, Component title, Component subtitle)
     {
-        g.drawString(font, Component.literal("GLASS//NET ").withColor(MUTED).append(Component.literal(":: ").withColor(ACCENT_DIM)).append(title.copy().withColor(TEXT)), x + 10, y + 8, TEXT, false);
+        g.drawString(font, title.copy().withColor(TEXT), x + 10, y + 8, TEXT, false);
         g.drawString(font, subtitle, x + 10, y + 19, MUTED, false);
-        g.fill(x + 8, y + 31, x + w - 8, y + 32, ACCENT_DIM);
-        g.fill(x + 8, y + 31, x + 8 + Math.min(w - 16, 40), y + 32, ACCENT);
-        int light = withAlpha(OK, 0.4F + 0.6F * pulse(4F));
-        g.fill(x + w - 14, y + 9, x + w - 9, y + 14, light);
+        g.fill(x + 10, y + 31, x + w - 10, y + 32, DIVIDER);
     }
 
     public static void label(GuiGraphics g, Font font, Component text, int x, int y)
     {
-        g.drawString(font, text.copy().withColor(ACCENT), x, y, ACCENT, false);
+        g.drawString(font, text.copy().withColor(LABEL), x, y, LABEL, false);
     }
 
     /** Text that types itself out over {@code duration} seconds since {@code start}. */

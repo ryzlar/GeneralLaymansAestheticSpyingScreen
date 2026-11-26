@@ -248,7 +248,7 @@ public class CameraScreen extends HoloScreen
         }
         g.drawString(font, font.plainSubstrByWidth(channel.name(), 150), lx, top + 56, Holo.TEXT, false);
         g.drawString(font, Component.translatable("glass.ui.ownedBy", channel.ownerName()), lx, top + 70, Holo.MUTED, false);
-        g.drawString(font, Component.translatable("glass.ui.broadcasting"), lx, top + 88, Holo.withAlpha(Holo.OK, 0.6F + 0.4F * Holo.pulse(4F)), false);
+        g.drawString(font, Component.translatable("glass.ui.broadcasting"), lx, top + 88, Holo.OK, false);
         if(channel.owner())
         {
             Holo.label(g, font, Component.translatable("glass.ui.changePassword"), rx, top + 41);

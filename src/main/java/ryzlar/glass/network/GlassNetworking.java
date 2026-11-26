@@ -416,6 +416,10 @@ public final class GlassNetworking
         projector.cloakDepth = Math.clamp(payload.depth(), 1, limits.depth());
         projector.cloakField = payload.field();
         projector.fieldHeight = Math.clamp(payload.fieldHeight(), 1, limits.height());
+        if(projector.cloak && projector.cloakField)
+        {
+            projector.updateFieldFloor();
+        }
         if(projector.active && !projector.hasFeed())
         {
             projector.turnOff();

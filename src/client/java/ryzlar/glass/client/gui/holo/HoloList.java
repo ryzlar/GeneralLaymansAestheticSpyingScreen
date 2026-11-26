@@ -35,6 +35,14 @@ public class HoloList<T> extends AbstractWidget
     private Consumer<T> onActivate;
     private int lastClicked = -1;
     private long lastClickTime;
+    /** Dragging a row to reorder (see {@link #onReorder}): the row held, where the mouse is, and whether it moved yet. */
+    @Nullable
+    private java.util.function.BiConsumer<Integer, Integer> onReorder;
+    private int held = -1;
+    private double heldFromY;
+    private double dragMouseY;
+    private boolean dragging;
+    private int hovered = -1;
 
     public HoloList(int x, int y, int width, int height, Function<T, Component> label, @Nullable Function<T, Component> tag, Component empty)
     {
@@ -55,6 +63,36 @@ public class HoloList<T> extends AbstractWidget
     {
         this.onActivate = onActivate;
         return this;
+    }
+
+    /** Rows can be dragged to another place: called with the row's index and where it is to go. */
+    public HoloList<T> onReorder(java.util.function.BiConsumer<Integer, Integer> onReorder)
+    {
+        this.onReorder = onReorder;
+        return this;
+    }
+
+    /** The row under the mouse last frame, or -1. */
+    public int hoveredIndex()
+    {
+        return hovered;
+    }
+
+    /** While a row is dragged: its index, else -1. */
+    public int draggedIndex()
+    {
+        return dragging ? held : -1;
+    }
+
+    /** While a row is dragged: where it would go if let go now, else -1. */
+    public int dropIndex()
+    {
+        if(!dragging)
+        {
+            return -1;
+        }
+        int slot = (int)Math.round((dragMouseY - getY() - 2 + scroll) / ROW - 0.5D);
+        return Mth.clamp(slot, 0, items.size() - 1);
     }
 
     /** Rows with the same key are the same row (so the selection survives updated data). Default: equals. */
@@ -162,12 +200,14 @@ public class HoloList<T> extends AbstractWidget
         Holo.inset(g, x, y, w, h);
         if(items.isEmpty())
         {
-            g.drawCenteredString(font, empty, x + w / 2, y + h / 2 - 4, 0xFF3E6670);
+            g.drawCenteredString(font, empty, x + w / 2, y + h / 2 - 4, 0xFF4A6B74);
             return;
         }
         boolean bar = maxScroll() > 0;
         int rowW = w - 4 - (bar ? 4 : 0);
         g.enableScissor(x + 1, y + 1, x + w - 1, y + h - 1);
+        hovered = -1;
+        int drop = dropIndex();
         for(int i = 0; i < items.size(); i++)
         {
             int rowY = y + 2 + i * ROW - (int)scroll;
@@ -176,14 +216,23 @@ public class HoloList<T> extends AbstractWidget
                 continue;
             }
             boolean hover = mouseX >= x + 2 && mouseX < x + 2 + rowW && mouseY >= rowY && mouseY < rowY + ROW && isMouseOver(mouseX, mouseY);
+            if(hover)
+            {
+                hovered = i;
+            }
+            if(dragging && i == held)
+            {
+                g.fill(x + 2, rowY, x + 2 + rowW, rowY + ROW, 0x103CE6FF);
+                continue; //drawn under the mouse instead
+            }
             if(i == selected)
             {
-                g.fill(x + 2, rowY, x + 2 + rowW, rowY + ROW, 0x553CE6FF);
-                g.fill(x + 2, rowY, x + 4, rowY + ROW, Holo.ACCENT);
+                g.fill(x + 2, rowY, x + 2 + rowW, rowY + ROW, 0x403CE6FF);
+                g.fill(x + 2, rowY, x + 3, rowY + ROW, Holo.ACCENT);
             }
             else if(hover)
             {
-                g.fill(x + 2, rowY, x + 2 + rowW, rowY + ROW, 0x223CE6FF);
+                g.fill(x + 2, rowY, x + 2 + rowW, rowY + ROW, 0x183CE6FF);
             }
             T item = items.get(i);
             int textColour = i == selected ? 0xFFFFFFFF : Holo.TEXT;
@@ -195,6 +244,17 @@ public class HoloList<T> extends AbstractWidget
             {
                 g.drawString(font, tagText, x + 2 + rowW - tagWidth + 2, rowY + 3, Holo.MUTED, false);
             }
+        }
+        if(dragging && held >= 0 && held < items.size())
+        {
+            //Where it goes: a line between the rows; and the row itself under the mouse.
+            int lineY = y + 2 + (drop > held ? drop + 1 : drop) * ROW - (int)scroll;
+            g.fill(x + 2, lineY - 1, x + 2 + rowW, lineY + 1, Holo.ACCENT);
+            int ghostY = (int)dragMouseY - ROW / 2;
+            g.fill(x + 2, ghostY, x + 2 + rowW, ghostY + ROW, 0xE0123A46);
+            Holo.frame(g, x + 2, ghostY, rowW, ROW, Holo.withAlpha(Holo.ACCENT, 0.7F));
+            String text = font.plainSubstrByWidth(label.apply(items.get(held)).getString(), rowW - 10);
+            g.drawString(font, text, x + 7, ghostY + 3, 0xFFFFFFFF, false);
         }
         g.disableScissor();
         if(bar)
@@ -219,6 +279,10 @@ public class HoloList<T> extends AbstractWidget
         lastClicked = index;
         lastClickTime = now;
         selected = index;
+        held = onReorder != null ? index : -1;
+        heldFromY = mouseY;
+        dragMouseY = mouseY;
+        dragging = false;
         T item = items.get(index);
         if(onSelect != null)
         {
@@ -228,6 +292,48 @@ public class HoloList<T> extends AbstractWidget
         {
             onActivate.accept(item);
         }
+    }
+
+    @Override
+    protected void onDrag(double mouseX, double mouseY, double dragX, double dragY)
+    {
+        if(held < 0)
+        {
+            return;
+        }
+        dragMouseY = mouseY;
+        if(!dragging && Math.abs(mouseY - heldFromY) > 3D)
+        {
+            dragging = true;
+        }
+        //Near the top or bottom edge, the list scrolls along.
+        if(dragging && mouseY < getY() + 6)
+        {
+            scroll = Mth.clamp(scroll - 2D, 0, maxScroll());
+        }
+        else if(dragging && mouseY > getY() + getHeight() - 6)
+        {
+            scroll = Mth.clamp(scroll + 2D, 0, maxScroll());
+        }
+    }
+
+    @Override
+    public void onRelease(double mouseX, double mouseY)
+    {
+        if(dragging && onReorder != null && held >= 0)
+        {
+            int to = dropIndex();
+            int from = held;
+            dragging = false;
+            held = -1;
+            if(to != from)
+            {
+                onReorder.accept(from, to);
+            }
+            return;
+        }
+        dragging = false;
+        held = -1;
     }
 
     @Override

@@ -255,7 +255,7 @@ public class ProjectorScreen extends HoloScreen
             Component problem = projector.cloakProblem();
             Component line = problem != null ? problem : Component.translatable("glass.ui.cloakLimits", limits.footprint(), limits.footprint(), limits.height(),
                     limits.amplifiers(), GlassProjectorBlockEntity.MAX_AMPLIFIERS);
-            int colour = problem != null ? Holo.withAlpha(Holo.ERROR, 0.6F + 0.4F * Holo.pulse(4F)) : Holo.MUTED;
+            int colour = problem != null ? Holo.ERROR : Holo.MUTED;
             List<net.minecraft.util.FormattedCharSequence> lines = font.split(line, rw);
             for(int i = 0; i < Math.min(3, lines.size()); i++)
             {
@@ -266,11 +266,11 @@ public class ProjectorScreen extends HoloScreen
         {
             g.drawString(font, font.plainSubstrByWidth(projector.channelName, rw), rx, top + 53, Holo.TEXT, false);
             g.drawString(font, Component.translatable(projector.camValid ? "glass.ui.online" : "glass.ui.offline"), rx, top + 64,
-                    projector.camValid ? Holo.OK : Holo.withAlpha(Holo.WARN, 0.5F + 0.5F * Holo.pulse(5F)), false);
+                    projector.camValid ? Holo.OK : Holo.WARN, false);
         }
         else
         {
-            g.drawString(font, Component.translatable("glass.ui.noSignal"), rx, top + 53, Holo.withAlpha(Holo.WARN, 0.5F + 0.5F * Holo.pulse(5F)), false);
+            g.drawString(font, Component.translatable("glass.ui.noSignal"), rx, top + 53, Holo.WARN, false);
         }
 
         GlassNetworking.ChannelInfo selected = results.getSelected();

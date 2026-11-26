@@ -74,6 +74,41 @@ public final class GlassRenderTypes
     public static final RenderPipeline CLOAK_SCREEN_PIPELINE = screenPipeline("glass_cloak_screen", true, false, true);
     public static final RenderPipeline CLOAK_SCREEN_NO_CULL_PIPELINE = screenPipeline("glass_cloak_screen_no_cull", false, false, true);
 
+    /**
+     * A cloak field's wall with someone walking through it: puts back the picture from before players and mobs were
+     * drawn wherever what is seen lies inside the field (see CloakWall). Not tested against depth: the shader decides.
+     */
+    public static final RenderPipeline WALL_CUT_PIPELINE = RenderPipeline.builder(RenderPipelines.MATRICES_PROJECTION_SNIPPET)
+            .withLocation(Glass.id("pipeline/glass_wall_cut"))
+            .withVertexShader(Glass.id("core/glass_wall_cut"))
+            .withFragmentShader(Glass.id("core/glass_wall_cut"))
+            .withSampler("Sampler0")
+            .withSampler("Sampler1")
+            .withVertexFormat(DefaultVertexFormat.NEW_ENTITY, VertexFormat.Mode.QUADS)
+            .withCull(false)
+            .withDepthWrite(false)
+            .withDepthTestFunction(com.mojang.blaze3d.platform.DepthTestFunction.NO_DEPTH_TEST)
+            .build();
+
+    /** {@link #WALL_CUT_PIPELINE} with the picture (Sampler0), the depth (Sampler1) and the screen-to-world matrix. */
+    public static RenderType wallCut(ResourceLocation colour, ResourceLocation depth, Supplier<Matrix4f> screenToWorld)
+    {
+        return RenderType.create("glass_wall_cut", 1536, false, false, WALL_CUT_PIPELINE,
+                RenderType.CompositeState.builder()
+                        .setTextureState(RenderStateShard.MultiTextureStateShard.builder().add(colour, false).add(depth, false).build())
+                        .setTexturingState(new RenderStateShard.TexturingStateShard("glass_wall_cut",
+                                () -> RenderSystem.setTextureMatrix(screenToWorld.get()), RenderSystem::resetTextureMatrix))
+                        .createCompositeState(false));
+    }
+
+    /** Distant Horizons' clouds, copied into a view (see DistantHorizonsClouds): flat coloured boxes. */
+    public static final RenderPipeline DH_CLOUDS_PIPELINE = RenderPipeline.builder(RenderPipelines.DEBUG_FILLED_SNIPPET)
+            .withLocation(Glass.id("pipeline/glass_dh_clouds"))
+            .withCull(false)
+            .build();
+    public static final RenderType DH_CLOUDS = RenderType.create("glass_dh_clouds", 1536, false, false, DH_CLOUDS_PIPELINE,
+            RenderType.CompositeState.builder().createCompositeState(false));
+
     public static final RenderType PLANES = RenderType.create("glass_planes", 1536, false, true, PLANES_PIPELINE,
             RenderType.CompositeState.builder().createCompositeState(false));
     public static final RenderType PLANES_NO_CULL = RenderType.create("glass_planes_no_cull", 1536, false, true, PLANES_NO_CULL_PIPELINE,

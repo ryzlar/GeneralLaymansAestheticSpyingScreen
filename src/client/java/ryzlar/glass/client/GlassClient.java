@@ -24,6 +24,7 @@ public class GlassClient implements ClientModInitializer
         GlassVersionClient.init();
         ryzlar.glass.client.holo.HoloClient.init();
         ryzlar.glass.client.tome.TomeClient.init();
+        ryzlar.glass.client.render.CloakWall.init();
 
         BlockRenderLayerMap.putBlocks(ChunkSectionLayer.CUTOUT, GlassRegistry.GLASS_EXTENSION, GlassRegistry.GLASS_PROJECTOR, GlassRegistry.GLASS_WIRELESS_EXTENSION);
         //A shader pack's cloak switching on or off: its blocks turn into nano pixels and stream into the projector.

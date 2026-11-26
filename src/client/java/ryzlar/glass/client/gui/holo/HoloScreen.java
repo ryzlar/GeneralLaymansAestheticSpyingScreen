@@ -102,15 +102,9 @@ public abstract class HoloScreen extends Screen
     @Override
     public void renderBackground(GuiGraphics g, int mouseX, int mouseY, float partialTick)
     {
-        g.fill(0, 0, width, height, 0xB0010509);
-        for(int gx = (width / 2) % 24; gx < width; gx += 24)
-        {
-            g.fill(gx, 0, gx + 1, height, 0x0A3CE6FF);
-        }
-        for(int gy = (height / 2) % 24; gy < height; gy += 24)
-        {
-            g.fill(0, gy, width, gy + 1, 0x0A3CE6FF);
-        }
+        //The game dimmed and blurred behind the panel, as vanilla's menus do.
+        renderBlurredBackground(g);
+        g.fill(0, 0, width, height, 0x70010509);
         Holo.panel(g, left, top, panelW, panelH, age() / 0.18F);
     }
 
@@ -126,12 +120,23 @@ public abstract class HoloScreen extends Screen
         GlassNetworking.ActionResult result = GlassNetClient.recentResult(RESULT_SHOW_MILLIS);
         if(localMessage != null)
         {
-            g.drawString(font, Component.literal("⚠ ").append(localMessage), left + 10, top + panelH - 13, Holo.WARN, false);
+            message(g, Component.literal("⚠ ").append(localMessage), Holo.WARN);
         }
         else if(result != null)
         {
-            Component text = Component.literal(result.ok() ? "▶ " : "⚠ ").append(GlassNetClient.describe(result));
-            g.drawString(font, text, left + 10, top + panelH - 13, result.ok() ? Holo.OK : Holo.ERROR, false);
+            message(g, Component.literal(result.ok() ? "▶ " : "⚠ ").append(GlassNetClient.describe(result)), result.ok() ? Holo.OK : Holo.ERROR);
+        }
+    }
+
+    /** The message at the bottom of the panel, wrapped to fit inside its margins (a longer one goes up a line). */
+    private void message(GuiGraphics g, Component text, int colour)
+    {
+        var lines = font.split(text, panelW - 20);
+        int y = top + panelH - 13 - (lines.size() - 1) * 10;
+        for(var line : lines)
+        {
+            g.drawString(font, line, left + 10, y, colour, false);
+            y += 10;
         }
     }
 
