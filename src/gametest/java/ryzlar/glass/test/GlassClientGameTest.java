@@ -140,6 +140,21 @@ public class GlassClientGameTest implements FabricClientGameTest
             minimap(singleplayer, context, server);
             return;
         }
+        if("fieldwalk".equals(System.getenv("GLASS_TEST_ONLY")))
+        {
+            fieldWalk(singleplayer, context, server);
+            return;
+        }
+        if("screens".equals(System.getenv("GLASS_TEST_ONLY")))
+        {
+            screens(singleplayer, context, server);
+            return;
+        }
+        if("fieldposts".equals(System.getenv("GLASS_TEST_ONLY")))
+        {
+            fieldPosts(singleplayer, context, server);
+            return;
+        }
         server.runCommand("tp @p -58 -60 70 180 5");
         settle(singleplayer, context);
         server.runCommand("setblock -66 -61 50 minecraft:redstone_block");
@@ -429,6 +444,145 @@ public class GlassClientGameTest implements FabricClientGameTest
     }
 
     /**
+     * GLASS_TEST_ONLY=fieldposts: the field's extensions on posts three blocks up. The field must still start at the
+     * ground (the lower part of the build hidden too, the ground under it there) and rise its height from there.
+     */
+    private static void fieldPosts(TestSingleplayerContext singleplayer, ClientGameTestContext context, TestServerContext server)
+    {
+        String id = "generallaymansaestheticspyingscreen:";
+        int[][] corners = { { -62, 38 }, { -54, 38 }, { -62, 46 }, { -54, 46 } };
+        for(int[] c : corners)
+        {
+            server.runCommand("fill " + c[0] + " -60 " + c[1] + " " + c[0] + " -58 " + c[1] + " minecraft:stone_bricks");
+            server.runCommand("setblock " + c[0] + " -57 " + c[1] + " " + id + "glass_wireless_extension");
+        }
+        //A low wall round the tree, under the extensions' height: it must be hidden too.
+        server.runCommand("fill -60 -60 40 -56 -59 44 minecraft:bricks hollow");
+        server.runCommand("setblock -66 -60 50 " + id + "glass_projector{placingFace:\"south\",wirelessPos:[[I;-62,-57,38],[I;-54,-57,38],[I;-62,-57,46],[I;-54,-57,46]]}");
+        context.waitTicks(2);
+        server.runOnServer(s -> {
+            GlassProjectorBlockEntity field = (GlassProjectorBlockEntity)s.overworld().getBlockEntity(FIELD_PROJECTOR);
+            field.cloak = true;
+            field.cloakField = true;
+            field.fieldHeight = 10;
+            field.sync();
+        });
+        server.runCommand("gamemode spectator @p");
+        context.runOnClient(mc -> mc.options.hideGui = true);
+        server.runCommand("tp @p -58 -57 64 180 12");
+        context.waitTicks(40);
+        settle(singleplayer, context);
+        context.takeScreenshot("posts_off");
+        server.runCommand("setblock -66 -61 50 minecraft:redstone_block");
+        context.waitTicks(120);
+        context.takeScreenshot("posts_on");
+        server.runCommand("tp @p -70 -52 62 225 25");
+        context.waitTicks(30);
+        context.takeScreenshot("posts_on_side");
+        String box = server.computeOnServer(s -> String.valueOf(((GlassProjectorBlockEntity)s.overworld().getBlockEntity(FIELD_PROJECTOR)).cloakFieldBox()));
+        LOGGER.info("fieldposts box: {}", box);
+        check(box.contains("-60.0") && box.contains("-50.0"), "the field starts at the ground (-60) and rises 10 blocks (-50): " + box);
+    }
+
+    /** GLASS_TEST_ONLY=screens: every GLASS screen opened once, for a look at them. */
+    private static void screens(TestSingleplayerContext singleplayer, ClientGameTestContext context, TestServerContext server)
+    {
+        String id = "generallaymansaestheticspyingscreen:";
+        server.runCommand("setblock -70 -60 60 " + id + "glass_terminal");
+        server.runCommand("setblock -72 -60 60 " + id + "glass_scene_selector");
+        server.runCommand("setblock -74 -60 60 " + id + "holo_projector");
+        server.runCommand("setblock -76 -60 60 " + id + "holo_scanner");
+        server.runCommand("tp @p -58 -60 66 180 10");
+        context.waitTicks(40);
+        settle(singleplayer, context);
+        java.util.List<java.util.Map.Entry<String, java.util.function.Function<net.minecraft.client.Minecraft, net.minecraft.client.gui.screens.Screen>>> screens = java.util.List.of(
+                java.util.Map.entry("projector", mc -> new ryzlar.glass.client.gui.ProjectorScreen(
+                        (ryzlar.glass.blockentity.GlassProjectorBlockEntity)mc.level.getBlockEntity(FIELD_PROJECTOR))),
+                java.util.Map.entry("array", mc -> new ryzlar.glass.client.gui.WirelessOrderScreen(
+                        (ryzlar.glass.blockentity.GlassProjectorBlockEntity)mc.level.getBlockEntity(FIELD_PROJECTOR), null)),
+                java.util.Map.entry("wireless", mc -> new ryzlar.glass.client.gui.WirelessProjectorScreen(
+                        (ryzlar.glass.blockentity.GlassWirelessBlockEntity)mc.level.getBlockEntity(new BlockPos(-62, -60, 38)))),
+                java.util.Map.entry("camera", mc -> new ryzlar.glass.client.gui.CameraScreen(
+                        (ryzlar.glass.blockentity.GlassTerminalBlockEntity)mc.level.getBlockEntity(new BlockPos(-70, -60, 60)))),
+                java.util.Map.entry("selector", mc -> new ryzlar.glass.client.gui.SceneSelectorScreen(
+                        (ryzlar.glass.blockentity.GlassSceneSelectorBlockEntity)mc.level.getBlockEntity(new BlockPos(-72, -60, 60)))),
+                java.util.Map.entry("holoprojector", mc -> new ryzlar.glass.client.holo.HoloProjectorScreen(
+                        (ryzlar.glass.holo.HoloProjectorBlockEntity)mc.level.getBlockEntity(new BlockPos(-74, -60, 60)))),
+                java.util.Map.entry("scanner", mc -> new ryzlar.glass.client.holo.HoloScannerScreen(
+                        (ryzlar.glass.holo.HoloScannerBlockEntity)mc.level.getBlockEntity(new BlockPos(-76, -60, 60)))));
+        for(var entry : screens)
+        {
+            context.runOnClient(mc -> mc.setScreen(entry.getValue().apply(mc)));
+            context.waitTicks(20);
+            context.takeScreenshot("screen_" + entry.getKey());
+        }
+        //The array's auto-order choices, open.
+        context.runOnClient(mc -> mc.setScreen(new ryzlar.glass.client.gui.WirelessOrderScreen(
+                (ryzlar.glass.blockentity.GlassProjectorBlockEntity)mc.level.getBlockEntity(FIELD_PROJECTOR), null)));
+        context.waitTicks(10);
+        context.runOnClient(mc -> mc.screen.children().stream()
+                .filter(c -> c instanceof net.minecraft.client.gui.components.AbstractWidget w && w.getMessage().getString().startsWith("Auto-order"))
+                .findFirst().ifPresent(c -> ((net.minecraft.client.gui.components.AbstractWidget)c).onClick(0, 0)));
+        context.waitTicks(5);
+        context.takeScreenshot("screen_array_auto");
+        context.runOnClient(mc -> mc.setScreen(null));
+    }
+
+    /**
+     * GLASS_TEST_ONLY=fieldwalk: walking through the field's south wall (z = 47) without a shader pack. A villager
+     * standing half through it, seen from outside: cut off at the wall, with nano pixels round it. The player walking
+     * through in third person (cut off at the wall), then in first person (nano pixels round them), the build coming
+     * back once in, and going again once out.
+     */
+    private static void fieldWalk(TestSingleplayerContext singleplayer, ClientGameTestContext context, TestServerContext server)
+    {
+        server.runCommand("gamemode creative @p");
+        context.runOnClient(mc -> mc.options.hideGui = true);
+        server.runCommand("setblock -66 -61 50 minecraft:redstone_block");
+        server.runCommand("tp @p -58 -60 58 180 10");
+        context.waitTicks(100);
+        settle(singleplayer, context);
+        context.takeScreenshot("fieldwalk_on");
+        //A villager half through the wall, the player watching from outside.
+        server.runCommand("summon minecraft:villager -59.5 -60 47.0 {NoAI:1b,Silent:1b,Rotation:[0f,0f],Tags:[\"glass_test\"]}");
+        context.waitTicks(10);
+        context.takeScreenshot("fieldwalk_villager");
+        server.runCommand("tp @e[tag=glass_test] -59.5 -60 46.0");
+        context.waitTicks(10);
+        context.takeScreenshot("fieldwalk_villager_in");
+        server.runCommand("kill @e[tag=glass_test]");
+        //The player walking through in third person (the camera stays outside, behind them).
+        context.runOnClient(mc -> mc.options.setCameraType(net.minecraft.client.CameraType.THIRD_PERSON_BACK));
+        for(String z : new String[] { "48.4", "47.6", "47.2", "46.8", "46.3" })
+        {
+            server.runCommand("tp @p -57.5 -60 " + z + " 180 15");
+            context.waitTicks(6);
+            context.takeScreenshot("fieldwalk_3p_z" + z.replace(".", "_"));
+        }
+        //First person: walking up to the wall and through it, then the build coming back.
+        context.runOnClient(mc -> mc.options.setCameraType(net.minecraft.client.CameraType.FIRST_PERSON));
+        server.runCommand("tp @p -57.5 -60 48.6 180 20");
+        context.waitTicks(30);
+        context.takeScreenshot("fieldwalk_1p_out");
+        server.runCommand("tp @p -57.5 -60 47.3 180 20");
+        context.waitTicks(4);
+        context.takeScreenshot("fieldwalk_1p_wall");
+        server.runCommand("tp @p -57.5 -60 46.6 180 20");
+        for(int t = 0; t <= 40; t += 4)
+        {
+            context.takeScreenshot(String.format("fieldwalk_in_t%02d", t));
+            context.waitTicks(4);
+        }
+        //Walking out again, turned round to watch the build go.
+        server.runCommand("tp @p -57.5 -60 48.6 180 20");
+        for(int t = 0; t <= 40; t += 4)
+        {
+            context.takeScreenshot(String.format("fieldwalk_out_t%02d", t));
+            context.waitTicks(4);
+        }
+    }
+
+    /**
      * GLASS_TEST_ONLY=minimap (with Xaero's Minimap): the field off, then on, seen on the minimap from outside it. The
      * build must not show on the map while the field is on.
      */
@@ -512,7 +666,8 @@ public class GlassClientGameTest implements FabricClientGameTest
                 return;
             }
             if("cloak".equals(System.getenv("GLASS_TEST_ONLY")) || "cloudwall".equals(System.getenv("GLASS_TEST_ONLY"))
-                    || "minimap".equals(System.getenv("GLASS_TEST_ONLY")))
+                    || "minimap".equals(System.getenv("GLASS_TEST_ONLY")) || "fieldwalk".equals(System.getenv("GLASS_TEST_ONLY"))
+                    || "screens".equals(System.getenv("GLASS_TEST_ONLY")) || "fieldposts".equals(System.getenv("GLASS_TEST_ONLY")))
             {
                 cloakOnly(singleplayer, context, server);
                 return;

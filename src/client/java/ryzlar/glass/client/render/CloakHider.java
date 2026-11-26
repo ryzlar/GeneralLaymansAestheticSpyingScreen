@@ -117,6 +117,8 @@ public final class CloakHider
 
     /** What the chunk builders read, from their own threads: replaced as a whole, never changed. */
     private static volatile Hidden[] active = new Hidden[0];
+    /** The hidden boxes of cloak fields that hide their whole build from the eye right now (see {@link CloakWall}). */
+    private static volatile AABB[] fieldWalls = new AABB[0];
 
     /** A cloak that hides (or is about to): its hidden parts, and since when. */
     private static final class Cloak
@@ -221,6 +223,12 @@ public final class CloakHider
             }
         }
         return false;
+    }
+
+    /** The hidden boxes of cloak fields that hide their whole build from the eye right now (fully on, not switching). */
+    public static AABB[] fieldWalls()
+    {
+        return fieldWalls;
     }
 
     // ---- Asked by the glass renderer ----
@@ -558,6 +566,18 @@ public final class CloakHider
             }
             now.addAll(cloak.published);
         }
+        List<AABB> walls = new ArrayList<>();
+        for(Cloak cloak : CLOAKS.values())
+        {
+            if(cloak.master.cloakFieldBox() != null && cloak.shown == STEADY)
+            {
+                for(Hidden part : cloak.parts)
+                {
+                    walls.add(part.hidden());
+                }
+            }
+        }
+        fieldWalls = walls.toArray(new AABB[0]);
         Hidden[] before = active;
         if(sameParts(before, now))
         {
@@ -686,6 +706,8 @@ public final class CloakHider
     {
         CLOAKS.clear();
         active = new Hidden[0];
+        fieldWalls = new AABB[0];
+        CloakWall.clear();
         CloakMapHider.clear();
     }
 }
