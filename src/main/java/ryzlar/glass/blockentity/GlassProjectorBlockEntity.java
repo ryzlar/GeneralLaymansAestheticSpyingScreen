@@ -507,13 +507,12 @@ public class GlassProjectorBlockEntity extends GlassBaseBlockEntity
         camPos = input.read("camPos", BlockPos.CODEC).orElse(BlockPos.ZERO);
         camFacing = input.read("camFacing", Direction.CODEC).orElse(Direction.NORTH);
         onClientDataReceived(); //again, now the projector's own fields are loaded too
-        if(justSwitchedOn && level != null && level.isClientSide)
+        if(justSwitchedOn && level != null && level.isClientSide && !cloak)
         {
-            //The screen builds itself; a cloak bends the light; a cloak field rises out of the ground.
-            net.minecraft.sounds.SoundEvent sound = cloakFieldBox() != null ? ryzlar.glass.GlassSounds.FIELD_RISE
-                    : cloak ? ryzlar.glass.GlassSounds.CLOAK_ENGAGE : ryzlar.glass.GlassSounds.NANO_ASSEMBLE;
+            //The screen builds itself. (A cloak switches on silently.)
             BlockPos pos = getBlockPos();
-            level.playLocalSound(pos.getX() + 0.5D, pos.getY() + 0.5D, pos.getZ() + 0.5D, sound, net.minecraft.sounds.SoundSource.BLOCKS, 0.9F, 1F, false);
+            level.playLocalSound(pos.getX() + 0.5D, pos.getY() + 0.5D, pos.getZ() + 0.5D, ryzlar.glass.GlassSounds.NANO_ASSEMBLE,
+                    net.minecraft.sounds.SoundSource.BLOCKS, 0.9F, 1F, false);
         }
         justSwitchedOn = false;
     }

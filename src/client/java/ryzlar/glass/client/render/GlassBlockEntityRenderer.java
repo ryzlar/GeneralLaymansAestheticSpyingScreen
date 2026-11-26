@@ -445,9 +445,10 @@ public class GlassBlockEntityRenderer implements BlockEntityRenderer<GlassBaseBl
             };
             if(!seen)
             {
-                //Seen from inside: its back (ScreenBack), as far up as the wall has risen; the roof once it is closed. Only
-                //from right inside the field: from outside, the far walls' insides showed through the near walls.
-                if(!switchingOff && box.contains(eye))
+                //Seen from inside: its back (ScreenBack), as far up as the wall has risen (or, switching off, has sunk back
+                //to); the roof while it is closed. Only from right inside the field: from outside, the far walls' insides
+                //showed through the near walls.
+                if(box.contains(eye))
                 {
                     drawFieldBack(key, side, x0, x1, y0, y1, z0, z1, Math.min(rise, height + 0.01F), rise >= full, origin, pose, buffers, partialTick);
                 }

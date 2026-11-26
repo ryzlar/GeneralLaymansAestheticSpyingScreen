@@ -199,13 +199,8 @@ public final class ScreenBack
 
     private static void shock(String key, Vec3 point, long now, boolean entering)
     {
-        SHOCKS.put(key, new Shock(point, now));
-        Minecraft mc = Minecraft.getInstance();
-        if(mc.level != null)
-        {
-            mc.level.playLocalSound(point.x, point.y, point.z, entering ? ryzlar.glass.GlassSounds.NANO_DISSOLVE : ryzlar.glass.GlassSounds.CLOAK_ENGAGE,
-                    net.minecraft.sounds.SoundSource.BLOCKS, 0.6F, entering ? 1.15F : 1.0F, false);
-        }
+        //Off: going into a field, what it hid is simply there at once (the static clearing in a sphere got in the way).
+        //Going through it still ripples and glitches its wall (see CloakWall), silently.
     }
 
     // ---- A cloak field's shockwave ----
