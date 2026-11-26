@@ -155,6 +155,21 @@ public class GlassClientGameTest implements FabricClientGameTest
             fieldPosts(singleplayer, context, server);
             return;
         }
+        if("worldmap".equals(System.getenv("GLASS_TEST_ONLY")))
+        {
+            worldMap(singleplayer, context, server);
+            return;
+        }
+        if("userbuild".equals(System.getenv("GLASS_TEST_ONLY")))
+        {
+            userBuild(singleplayer, context, server);
+            return;
+        }
+        if("mapposts".equals(System.getenv("GLASS_TEST_ONLY")))
+        {
+            mapPosts(singleplayer, context, server);
+            return;
+        }
         server.runCommand("tp @p -58 -60 70 180 5");
         settle(singleplayer, context);
         server.runCommand("setblock -66 -61 50 minecraft:redstone_block");
@@ -444,6 +459,46 @@ public class GlassClientGameTest implements FabricClientGameTest
     }
 
     /**
+     * GLASS_TEST_ONLY=worldmap (with Xaero's World Map): its full map opened from outside the field, with the field off,
+     * then on, then off again. The build must not show on the map while the field is on.
+     */
+    private static void worldMap(TestSingleplayerContext singleplayer, ClientGameTestContext context, TestServerContext server)
+    {
+        java.util.function.Function<net.minecraft.client.Options, net.minecraft.client.KeyMapping> openMap = options -> java.util.Arrays.stream(options.keyMappings)
+                .filter(k -> k.getName().equals("gui.xaero_open_map")).findFirst().orElseThrow();
+        server.runCommand("tp @p -58 -60 66 180 30");
+        context.waitTicks(100);
+        settle(singleplayer, context);
+        context.waitTicks(100);
+        //Xaero's own "new waypoint" screen opens (it crashed in the dev game when XaeroLib was not remapped with the minimap).
+        java.util.function.Function<net.minecraft.client.Options, net.minecraft.client.KeyMapping> newWaypoint = options -> java.util.Arrays.stream(options.keyMappings)
+                .filter(k -> k.getName().equals("gui.xaero_new_waypoint")).findFirst().orElseThrow();
+        context.getInput().pressKey(newWaypoint);
+        context.waitTicks(20);
+        context.takeScreenshot("worldmap_new_waypoint");
+        context.runOnClient(mc -> mc.setScreen(null));
+        context.waitTicks(5);
+        String[] steps = { "worldmap_off", "worldmap_on", "worldmap_off_again" };
+        for(int step = 0; step < steps.length; step++)
+        {
+            if(step == 1)
+            {
+                server.runCommand("setblock -66 -61 50 minecraft:redstone_block");
+            }
+            else if(step == 2)
+            {
+                server.runCommand("setblock -66 -61 50 minecraft:air");
+            }
+            context.waitTicks(step == 0 ? 20 : 160);
+            context.getInput().pressKey(openMap);
+            context.waitTicks(40);
+            context.takeScreenshot(steps[step]);
+            context.runOnClient(mc -> mc.setScreen(null));
+            context.waitTicks(5);
+        }
+    }
+
+    /**
      * GLASS_TEST_ONLY=fieldposts: the field's extensions on posts three blocks up. The field must still start at the
      * ground (the lower part of the build hidden too, the ground under it there) and rise its height from there.
      */
@@ -482,6 +537,170 @@ public class GlassClientGameTest implements FabricClientGameTest
         String box = server.computeOnServer(s -> String.valueOf(((GlassProjectorBlockEntity)s.overworld().getBlockEntity(FIELD_PROJECTOR)).cloakFieldBox()));
         LOGGER.info("fieldposts box: {}", box);
         check(box.contains("-60.0") && box.contains("-50.0"), "the field starts at the ground (-60) and rises 10 blocks (-50): " + box);
+    }
+
+    /**
+     * GLASS_TEST_ONLY=mapposts (with Xaero's Minimap and World Map): the field on posts with a dark oak build inside, as
+     * in a real world. Seen from outside on the minimap while it switches on and off, and on the World Map.
+     */
+    private static void mapPosts(TestSingleplayerContext singleplayer, ClientGameTestContext context, TestServerContext server)
+    {
+        String id = "generallaymansaestheticspyingscreen:";
+        int[][] corners = { { -62, 38 }, { -54, 38 }, { -62, 46 }, { -54, 46 } };
+        for(int[] c : corners)
+        {
+            server.runCommand("fill " + c[0] + " -60 " + c[1] + " " + c[0] + " -58 " + c[1] + " minecraft:stone");
+            server.runCommand("setblock " + c[0] + " -57 " + c[1] + " " + id + "glass_wireless_extension");
+        }
+        server.runCommand("fill -61 -60 39 -55 -60 45 minecraft:air");
+        server.runCommand("fill -61 -60 39 -55 -55 45 minecraft:dark_oak_planks hollow");
+        server.runCommand("fill -61 -54 39 -55 -54 45 minecraft:dark_oak_slab");
+        server.runCommand("setblock -66 -60 50 " + id + "glass_projector{placingFace:\"south\",wirelessPos:[[I;-62,-57,38],[I;-54,-57,38],[I;-62,-57,46],[I;-54,-57,46]]}");
+        context.waitTicks(2);
+        server.runOnServer(s -> {
+            GlassProjectorBlockEntity field = (GlassProjectorBlockEntity)s.overworld().getBlockEntity(FIELD_PROJECTOR);
+            field.cloak = true;
+            field.cloakField = true;
+            field.fieldHeight = 10;
+            field.sync();
+        });
+        server.runCommand("tp @p -58 -60 66 180 30");
+        context.waitTicks(100);
+        settle(singleplayer, context);
+        context.waitTicks(60);
+        context.takeScreenshot("mapposts_mini_off");
+        server.runCommand("setblock -66 -61 50 minecraft:redstone_block");
+        for(int t = 0; t <= 40; t += 8)
+        {
+            context.takeScreenshot(String.format("mapposts_mini_on_t%02d", t));
+            context.waitTicks(8);
+        }
+        context.waitTicks(60);
+        context.takeScreenshot("mapposts_mini_on");
+        java.util.function.Function<net.minecraft.client.Options, net.minecraft.client.KeyMapping> openMap = options -> java.util.Arrays.stream(options.keyMappings)
+                .filter(k -> k.getName().equals("gui.xaero_open_map")).findFirst().orElseThrow();
+        context.getInput().pressKey(openMap);
+        context.waitTicks(40);
+        context.takeScreenshot("mapposts_world_on");
+        context.runOnClient(mc -> mc.setScreen(null));
+        server.runCommand("setblock -66 -61 50 minecraft:air");
+        for(int t = 0; t <= 40; t += 8)
+        {
+            context.takeScreenshot(String.format("mapposts_mini_off_t%02d", t));
+            context.waitTicks(8);
+        }
+        context.waitTicks(60);
+        context.takeScreenshot("mapposts_mini_off_again");
+        context.getInput().pressKey(openMap);
+        context.waitTicks(40);
+        context.takeScreenshot("mapposts_world_off_again");
+        context.runOnClient(mc -> mc.setScreen(null));
+    }
+
+    /**
+     * GLASS_TEST_ONLY=userbuild (with Xaero's maps): a build copied block for block from a real world (setblock lines in
+     * the file GLASS_TEST_BUILD), with its field projector, seen on the minimap and World Map from outside.
+     */
+    private static void userBuild(TestSingleplayerContext singleplayer, ClientGameTestContext context, TestServerContext server)
+    {
+        String id = "generallaymansaestheticspyingscreen:";
+        try
+        {
+            for(String line : java.nio.file.Files.readAllLines(java.nio.file.Path.of(System.getenv("GLASS_TEST_BUILD"))))
+            {
+                if(!line.isBlank())
+                {
+                    server.runCommand(line);
+                }
+            }
+        }
+        catch(java.io.IOException e)
+        {
+            throw new java.io.UncheckedIOException(e);
+        }
+        BlockPos projector = new BlockPos(49, -60, 47);
+        server.runCommand("setblock 49 -60 47 " + id + "glass_projector{placingFace:\"south\",wirelessPos:[[I;54,-58,53],[I;43,-58,53],[I;54,-58,42],[I;43,-58,42]]}");
+        context.waitTicks(2);
+        server.runOnServer(s -> {
+            GlassProjectorBlockEntity field = (GlassProjectorBlockEntity)s.overworld().getBlockEntity(projector);
+            field.cloak = true;
+            field.cloakField = true;
+            field.fieldHeight = 10;
+            field.cloakDepth = 4;
+            field.updateFieldFloor();
+            field.sync();
+        });
+        server.runCommand("tp @p 49 -60 66 180 30");
+        context.waitTicks(100);
+        settle(singleplayer, context);
+        context.waitTicks(60);
+        context.takeScreenshot("userbuild_off");
+        server.runCommand("setblock 49 -61 47 minecraft:redstone_block");
+        for(int t = 0; t <= 32; t += 4)
+        {
+            context.takeScreenshot(String.format("userbuild_on_t%02d", t));
+            context.waitTicks(4);
+        }
+        context.waitTicks(80);
+        context.takeScreenshot("userbuild_on");
+        java.util.function.Function<net.minecraft.client.Options, net.minecraft.client.KeyMapping> openMap = options -> java.util.Arrays.stream(options.keyMappings)
+                .filter(k -> k.getName().equals("gui.xaero_open_map")).findFirst().orElseThrow();
+        context.getInput().pressKey(openMap);
+        context.waitTicks(40);
+        context.takeScreenshot("userbuild_world_on");
+        context.runOnClient(mc -> mc.setScreen(null));
+        context.waitTicks(400);
+        context.takeScreenshot("userbuild_on_late");
+        server.runCommand("tp @p 52 -60 70 180 30");
+        context.waitTicks(100);
+        context.takeScreenshot("userbuild_on_moved");
+        server.runCommand("setblock 49 -61 47 minecraft:air");
+        for(int t = 0; t <= 32; t += 4)
+        {
+            context.takeScreenshot(String.format("userbuild_off_t%02d", t));
+            context.waitTicks(4);
+        }
+        context.waitTicks(80);
+        context.takeScreenshot("userbuild_off_again");
+        context.getInput().pressKey(openMap);
+        context.waitTicks(40);
+        context.takeScreenshot("userbuild_world_off_again");
+        context.runOnClient(mc -> mc.setScreen(null));
+        String box = server.computeOnServer(s -> String.valueOf(((GlassProjectorBlockEntity)s.overworld().getBlockEntity(projector)).cloakFieldBox()));
+        LOGGER.info("userbuild box: {}", box);
+        String map = context.computeOnClient(mc -> {
+            StringBuilder sb = new StringBuilder("hides=" + ryzlar.glass.client.render.CloakMapHider.hidesAnything());
+            for(int y = -62; y <= -54; y++)
+            {
+                sb.append(" y").append(y).append('=').append(ryzlar.glass.client.render.CloakMapHider.state(49, y, 44));
+            }
+            //Per column, the top block the map would find.
+            for(int z = 40; z <= 56; z++)
+            {
+                sb.append("\n");
+                for(int x = 41; x <= 57; x++)
+                {
+                    String top = "?";
+                    for(int y = -45; y >= -64; y--)
+                    {
+                        net.minecraft.world.level.block.state.BlockState s = ryzlar.glass.client.render.CloakMapHider.state(x, y, z);
+                        if(s == null)
+                        {
+                            s = mc.level.getBlockState(new BlockPos(x, y, z));
+                        }
+                        if(!s.isAir())
+                        {
+                            String n = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(s.getBlock()).getPath();
+                            top = n.substring(0, 2);
+                            break;
+                        }
+                    }
+                    sb.append(top).append(' ');
+                }
+            }
+            return sb.toString();
+        });
+        LOGGER.info("userbuild map: {}", map);
     }
 
     /** GLASS_TEST_ONLY=screens: every GLASS screen opened once, for a look at them. */
@@ -667,7 +886,9 @@ public class GlassClientGameTest implements FabricClientGameTest
             }
             if("cloak".equals(System.getenv("GLASS_TEST_ONLY")) || "cloudwall".equals(System.getenv("GLASS_TEST_ONLY"))
                     || "minimap".equals(System.getenv("GLASS_TEST_ONLY")) || "fieldwalk".equals(System.getenv("GLASS_TEST_ONLY"))
-                    || "screens".equals(System.getenv("GLASS_TEST_ONLY")) || "fieldposts".equals(System.getenv("GLASS_TEST_ONLY")))
+                    || "screens".equals(System.getenv("GLASS_TEST_ONLY")) || "fieldposts".equals(System.getenv("GLASS_TEST_ONLY"))
+                    || "worldmap".equals(System.getenv("GLASS_TEST_ONLY")) || "mapposts".equals(System.getenv("GLASS_TEST_ONLY"))
+                    || "userbuild".equals(System.getenv("GLASS_TEST_ONLY")))
             {
                 cloakOnly(singleplayer, context, server);
                 return;

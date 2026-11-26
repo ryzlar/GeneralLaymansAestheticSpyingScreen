@@ -18,7 +18,7 @@ import ryzlar.glass.client.GlassClientState;
 import ryzlar.glass.client.TerminalPlacement;
 
 /**
- * What map mods (Xaero's Minimap) are to see where a cloak hides something: the same made-up ground the world drawing
+ * What map mods (Xaero's Minimap and World Map) are to see where a cloak hides something: the same made-up ground the world drawing
  * gets ({@link CloakFill#hide}), for every cloak that is on, glass cloaks drawn with views included (those hide nothing
  * from the world drawing, see {@link CloakHider}). A map reads the blocks themselves, so without this a cloaked build
  * showed on it. Seen from inside the cloak, the base shows on the map as it does in the world.
@@ -30,7 +30,8 @@ import ryzlar.glass.client.TerminalPlacement;
 public final class CloakMapHider
 {
     /** Only kept with a map mod that reads it installed (it costs a made-up ground per glass cloak otherwise unneeded). */
-    private static final boolean NEEDED = net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("xaerominimap");
+    private static final boolean NEEDED = net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("xaerominimap")
+            || net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("xaeroworldmap");
     private static final BlockState NANO = GlassRegistry.NANO_VEIL.defaultBlockState();
     /** How long the wave takes to cross the hidden part, and how wide its nano front is, in ticks. */
     private static final float SPREAD_TICKS = 30F, FRONT_TICKS = 6F;
@@ -61,6 +62,8 @@ public final class CloakMapHider
     private static volatile long hurryUntil = Long.MIN_VALUE;
     private static volatile long gameTime;
     private static Map<String, List<Part>> lastParts = Map.of();
+    /** The chunks under the parts shown last tick. */
+    private static java.util.Set<Long> lastChunks = java.util.Set.of();
 
     private CloakMapHider() {}
 
@@ -218,6 +221,84 @@ public final class CloakMapHider
         {
             hurryUntil = now + HURRY_AFTER_TICKS;
         }
+        //The chunks whose map picture changes: those under the parts shown now and those shown before.
+        java.util.Set<Long> chunks = new java.util.HashSet<>();
+        for(Shown part : active)
+        {
+            CloakHider.Hidden h = part.hidden;
+            for(int cx = h.minX() >> 4; cx <= (h.minX() + h.sizeX() - 1) >> 4; cx++)
+            {
+                for(int cz = h.minZ() >> 4; cz <= (h.minZ() + h.sizeZ() - 1) >> 4; cz++)
+                {
+                    chunks.add(net.minecraft.world.level.ChunkPos.asLong(cx, cz));
+                }
+            }
+        }
+        java.util.Set<Long> before = lastChunks;
+        lastChunks = chunks;
+        if(hurry())
+        {
+            java.util.Set<Long> dirty = new java.util.HashSet<>(chunks);
+            dirty.addAll(before);
+            for(long chunk : dirty)
+            {
+                markDirty(level, net.minecraft.world.level.ChunkPos.getX(chunk), net.minecraft.world.level.ChunkPos.getZ(chunk));
+            }
+        }
+        else if(!before.equals(chunks))
+        {
+            for(long chunk : before)
+            {
+                markDirty(level, net.minecraft.world.level.ChunkPos.getX(chunk), net.minecraft.world.level.ChunkPos.getZ(chunk));
+            }
+        }
+    }
+
+    /**
+     * Xaero's maps only redraw a chunk that changed since they last drew it: a flag they add to the chunk, cleared when
+     * a block in it changes. A cloak changes no block, so the chunks it hides something in are flagged by hand while
+     * their map picture changes (otherwise the map kept whatever it drew last, a nano wave half way across the build).
+     */
+    private static void markDirty(ClientLevel level, int cx, int cz)
+    {
+        net.minecraft.world.level.chunk.LevelChunk chunk = level.getChunkSource().getChunk(cx, cz, false);
+        if(chunk == null)
+        {
+            return;
+        }
+        for(java.lang.reflect.Field field : CLEAN_FIELDS)
+        {
+            try
+            {
+                field.set(chunk, Boolean.FALSE);
+            }
+            catch(ReflectiveOperationException | RuntimeException ignored)
+            {
+                //A map version without it: it is left alone.
+            }
+        }
+    }
+
+    /** Xaero's Minimap's and World Map's "drawn since it last changed" flags on a chunk (those that exist). */
+    private static final List<java.lang.reflect.Field> CLEAN_FIELDS = cleanFields("xaero_chunkClean", "xaero_wm_chunkClean");
+
+    private static List<java.lang.reflect.Field> cleanFields(String... names)
+    {
+        List<java.lang.reflect.Field> fields = new ArrayList<>();
+        for(String name : names)
+        {
+            try
+            {
+                java.lang.reflect.Field field = net.minecraft.world.level.chunk.LevelChunk.class.getDeclaredField(name);
+                field.setAccessible(true);
+                fields.add(field);
+            }
+            catch(ReflectiveOperationException | RuntimeException ignored)
+            {
+                //That map is not installed.
+            }
+        }
+        return fields;
     }
 
     /** True if the same cloaks with the same parts are shown as last tick (nothing for the map to catch up on). */
@@ -265,6 +346,7 @@ public final class CloakMapHider
     {
         CLOAKS.clear();
         lastParts = Map.of();
+        lastChunks = java.util.Set.of();
         active = new Shown[0];
     }
 }

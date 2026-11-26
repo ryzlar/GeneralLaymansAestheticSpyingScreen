@@ -19,6 +19,7 @@
     "DistantHorizonsFogMixin",
     "DistantHorizonsCloudsMixin",
     "XaeroMinimapMixin",
+    "XaeroWorldMapMixin",
     "LevelRendererCloakWallMixin",
     "LevelWeatherMixin",
     "LivingEntityRendererMixin",

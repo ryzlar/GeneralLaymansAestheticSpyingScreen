@@ -23,6 +23,8 @@ public class GlassMixinPlugin implements IMixinConfigPlugin
     /** Mixins into Distant Horizons, only when it is installed. */
     /** Mixins into Xaero's Minimap, only when it is installed. */
     private static final Set<String> XAERO_MINIMAP_ONLY = Set.of("XaeroMinimapMixin");
+    /** Mixins into Xaero's World Map, only when it is installed. */
+    private static final Set<String> XAERO_WORLD_MAP_ONLY = Set.of("XaeroWorldMapMixin");
     private static final Set<String> DISTANT_HORIZONS_ONLY = Set.of("DistantHorizonsRenderMixin", "DistantHorizonsFogMixin", "DistantHorizonsCloudsMixin");
 
     @Override
@@ -51,6 +53,10 @@ public class GlassMixinPlugin implements IMixinConfigPlugin
         if(XAERO_MINIMAP_ONLY.contains(name))
         {
             return net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("xaerominimap");
+        }
+        if(XAERO_WORLD_MAP_ONLY.contains(name))
+        {
+            return net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("xaeroworldmap");
         }
         if(DISTANT_HORIZONS_ONLY.contains(name))
         {
