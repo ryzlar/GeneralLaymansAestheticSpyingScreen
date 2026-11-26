@@ -11,8 +11,25 @@ Client and server both need 1.2.0: a 1.1.0 client is told to update when it join
 - **Nano animation with shader packs**: a cloak field's walls rise as a ring of glowing nano blocks, the build inside
   goes from the ground up behind them and the roof closes in nano; a glass cloak's build turns to nano blocks from the
   projector outwards. The blocks that go stream into the projector as nano pixels, and back out when it switches off.
+- **Distant Horizons support**: cloaks and camera screens work with Distant Horizons installed. Its far terrain no
+  longer shows through a cloak, its fog no longer covers the camera image, and its clouds show in the views and in the
+  cloak's animation.
+- **Xaero's Minimap and World Map support**: from outside a cloak, its build no longer shows on the map; the map shows
+  the same ground the cloak shows (grass stays grass). It goes off the map and comes back with a nano wave. From
+  inside, your base is on the map as always.
+- **Walking through a cloak field's wall**: anyone crossing it is cut off at the wall, with a patch of nano pixels
+  round the body, seen from inside and outside, in first and third person.
+- **Easier wireless array**: drag the extensions into order, click them in the order you want, or let it order them
+  (best fit, zigzag or nearest next), with a live 3D preview of the result.
 
 ### Changed
+
+- **Simpler GLASS screens**: every GLASS screen has a new, cleaner glass panel look.
+- **A cloak field starts at the ground**: with its extensions on posts, the field now reaches down to the ground and
+  its height counts from there. Blocks under the ground stay as they are.
+- **Silent cloaks**: cloaks and cloak fields switch on and off without a sound.
+- Walking into a cloak field shows what it hid at once (the shockwave and its sound are gone).
+- Switching a cloak field off while inside it, its walls now sink back down, as they rose.
 
 - **Cloak fields are much lighter**: a field that is on no longer draws the world again for every side of it. Its build
   is left out of the world drawing instead (the ground carried on across it), so it costs almost nothing. Switching on
@@ -26,6 +43,7 @@ Client and server both need 1.2.0: a 1.1.0 client is told to update when it join
 - The top of a cloaked ring of glass no longer shows strips of sky when seen from across it.
 - Switching a cloak off no longer shows a blown-up, colourful piece of its picture.
 - Flicking a cloak off and straight back on no longer flashes white panels on its glass.
+- A long message at the bottom of a GLASS screen now wraps inside the panel instead of running off it.
 
 ## 1.1.0+1.21.8
 
