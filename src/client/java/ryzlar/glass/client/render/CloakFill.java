@@ -852,7 +852,9 @@ public final class CloakFill
         public int getBrightness(LightLayer layer, BlockPos pos)
         {
             Column column = made.get(columnKey(pos));
-            if(column != null && pos.getY() > column.height() || area.hidden().contains(Vec3.atCenterOf(pos)))
+            //From the made-up ground's top block up: a block lower than a full one (a path, farmland, a slab) is lit by
+            //the light where it stands itself, which under a hidden roof was dark.
+            if(column != null && pos.getY() >= column.height() || area.hidden().contains(Vec3.atCenterOf(pos)))
             {
                 return hiddenLight(layer, pos);
             }

@@ -48,10 +48,18 @@ public class GlassProjectorBlockEntity extends GlassBaseBlockEntity
     public int cloakDepth = 4;
     /**
      * Cloak field: with wireless extensions in the four corners of a rectangle, the cloak is a box of virtual walls (and a
-     * roof) rising from them, {@link #fieldHeight} blocks high, hiding everything inside.
+     * roof) over the rectangle, rising from the ground around it ({@link #fieldFloor}) {@link #fieldHeight} blocks high,
+     * hiding everything inside. (Extensions standing on posts still have it start at the ground.)
      */
     public boolean cloakField;
     public int fieldHeight = 8;
+    /**
+     * The field's bottom: the ground around the rectangle, worked out when the projector switches on (see
+     * {@link #updateFieldFloor}); {@link Integer#MIN_VALUE} when not known (then the extensions' height).
+     */
+    public int fieldFloor = Integer.MIN_VALUE;
+    /** How far below its extensions a field may reach down to the ground, in blocks. */
+    public static final int MAX_FIELD_DROP = 16;
     public static final int MAX_FIELD_HEIGHT = 32;
     public static final int MAX_CLOAK_DEPTH = 32;
 
@@ -118,7 +126,49 @@ public class GlassProjectorBlockEntity extends GlassBaseBlockEntity
         {
             return null;
         }
-        return new AABB(corners[0], corners[1], corners[2], corners[3] + 1, corners[1] + fieldHeight, corners[4] + 1);
+        int floor = fieldFloor == Integer.MIN_VALUE ? corners[1] : Math.clamp(fieldFloor, corners[1] - MAX_FIELD_DROP, corners[1]);
+        int roof = Math.max(floor + fieldHeight, corners[1] + 1);
+        return new AABB(corners[0], floor, corners[2], corners[3] + 1, roof, corners[4] + 1);
+    }
+
+    /**
+     * Works out the field's bottom: the ground just outside the rectangle all round (the most usual height there, so a
+     * pond or a wall beside it does not count), no higher than the extensions and at most {@link #MAX_FIELD_DROP} below
+     * them. On the server; synced to the clients with the rest.
+     */
+    public void updateFieldFloor()
+    {
+        int[] corners = fieldCorners(wirelessPos);
+        if(level == null || corners == null)
+        {
+            fieldFloor = Integer.MIN_VALUE;
+            return;
+        }
+        java.util.Map<Integer, Integer> counts = new java.util.HashMap<>();
+        for(int x = corners[0] - 1; x <= corners[3] + 1; x++)
+        {
+            for(int z = corners[2] - 1; z <= corners[4] + 1; z++)
+            {
+                boolean ring = x == corners[0] - 1 || x == corners[3] + 1 || z == corners[2] - 1 || z == corners[4] + 1;
+                if(ring)
+                {
+                    //The first free block above the ground there (leaves do not count as ground).
+                    int ground = level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
+                    counts.merge(Math.clamp(ground, corners[1] - MAX_FIELD_DROP, corners[1]), 1, Integer::sum);
+                }
+            }
+        }
+        int best = corners[1];
+        int most = 0;
+        for(java.util.Map.Entry<Integer, Integer> e : counts.entrySet())
+        {
+            if(e.getValue() > most || e.getValue() == most && e.getKey() < best)
+            {
+                best = e.getKey();
+                most = e.getValue();
+            }
+        }
+        fieldFloor = best;
     }
 
     /** minX, y, minZ, maxX, maxZ of four positions forming a rectangle's corners on one level, or null. */
@@ -374,6 +424,10 @@ public class GlassProjectorBlockEntity extends GlassBaseBlockEntity
     {
         if(newState)
         {
+            if(!active && cloak && cloakField)
+            {
+                updateFieldFloor();
+            }
             net.minecraft.network.chat.Component problem = active ? null : cloakProblem();
             if(problem != null)
             {
@@ -427,6 +481,7 @@ public class GlassProjectorBlockEntity extends GlassBaseBlockEntity
         output.putInt("cloakDepth", cloakDepth);
         output.putBoolean("cloakField", cloakField);
         output.putInt("fieldHeight", fieldHeight);
+        output.putInt("fieldFloor", fieldFloor);
         output.putBoolean("camValid", camValid);
         output.store("camDimension", Level.RESOURCE_KEY_CODEC, camDimension);
         output.store("camPos", BlockPos.CODEC, camPos);
@@ -446,6 +501,7 @@ public class GlassProjectorBlockEntity extends GlassBaseBlockEntity
         cloakDepth = Math.clamp(input.getIntOr("cloakDepth", 4), 1, MAX_CLOAK_DEPTH);
         cloakField = input.getBooleanOr("cloakField", false);
         fieldHeight = Math.clamp(input.getIntOr("fieldHeight", 8), 1, MAX_FIELD_HEIGHT);
+        fieldFloor = input.getIntOr("fieldFloor", Integer.MIN_VALUE);
         camValid = input.getBooleanOr("camValid", false);
         camDimension = input.read("camDimension", Level.RESOURCE_KEY_CODEC).orElse(Level.OVERWORLD);
         camPos = input.read("camPos", BlockPos.CODEC).orElse(BlockPos.ZERO);
