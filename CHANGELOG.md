@@ -1,16 +1,11 @@
 # Changelog
 
-## 1.2.0+1.21.8
+## 1.3.0+1.21.8
 
-Client and server both need 1.2.0: a 1.1.0 client is told to update when it joins a 1.2.0 server.
+Client and server both need 1.3.0: a 1.2.0 client is told to update when it joins a 1.3.0 server.
 
 ### New
 
-- **Cloaks work with shader packs** (Iris with Complementary, Bliss and others): the cloaked build is gone, and the
-  shader draws what lies behind it, shadows included.
-- **Nano animation with shader packs**: a cloak field's walls rise as a ring of glowing nano blocks, the build inside
-  goes from the ground up behind them and the roof closes in nano; a glass cloak's build turns to nano blocks from the
-  projector outwards. The blocks that go stream into the projector as nano pixels, and back out when it switches off.
 - **Distant Horizons support**: cloaks and camera screens work with Distant Horizons installed. Its far terrain no
   longer shows through a cloak, its fog no longer covers the camera image, and its clouds show in the views and in the
   cloak's animation.
@@ -31,6 +26,24 @@ Client and server both need 1.2.0: a 1.1.0 client is told to update when it join
 - Walking into a cloak field shows what it hid at once (the shockwave and its sound are gone).
 - Switching a cloak field off while inside it, its walls now sink back down, as they rose.
 
+### Fixed
+
+- A long message at the bottom of a GLASS screen now wraps inside the panel instead of running off it.
+
+## 1.2.0+1.21.8
+
+Client and server both need 1.2.0: a 1.1.0 client is told to update when it joins a 1.2.0 server.
+
+### New
+
+- **Cloaks work with shader packs** (Iris with Complementary, Bliss and others): the cloaked build is gone, and the
+  shader draws what lies behind it, shadows included.
+- **Nano animation with shader packs**: a cloak field's walls rise as a ring of glowing nano blocks, the build inside
+  goes from the ground up behind them and the roof closes in nano; a glass cloak's build turns to nano blocks from the
+  projector outwards. The blocks that go stream into the projector as nano pixels, and back out when it switches off.
+
+### Changed
+
 - **Cloak fields are much lighter**: a field that is on no longer draws the world again for every side of it. Its build
   is left out of the world drawing instead (the ground carried on across it), so it costs almost nothing. Switching on
   and off without a shader pack still plays the walls rising and sinking.
@@ -43,7 +56,6 @@ Client and server both need 1.2.0: a 1.1.0 client is told to update when it join
 - The top of a cloaked ring of glass no longer shows strips of sky when seen from across it.
 - Switching a cloak off no longer shows a blown-up, colourful piece of its picture.
 - Flicking a cloak off and straight back on no longer flashes white panels on its glass.
-- A long message at the bottom of a GLASS screen now wraps inside the panel instead of running off it.
 
 ## 1.1.0+1.21.8
 
