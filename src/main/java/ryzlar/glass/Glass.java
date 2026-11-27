@@ -28,6 +28,10 @@ public class Glass implements ModInitializer
         GlassRegistry.init();
         ryzlar.glass.tome.TomeGift.init();
         GlassSounds.init();
+        if(ryzlar.glass.decoy.NanoDecoyFeature.ENABLED)
+        {
+            ryzlar.glass.decoy.NanoDecoy.init();
+        }
         if(ryzlar.glass.gadget.GadgetFeature.ENABLED)
         {
             ryzlar.glass.gadget.Gadgets.init();

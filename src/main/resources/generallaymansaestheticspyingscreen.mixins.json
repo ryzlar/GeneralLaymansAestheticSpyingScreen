@@ -4,7 +4,9 @@
   "package": "ryzlar.glass.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
-    "BlockCollisionsMixin"
+    "BlockCollisionsMixin",
+    "CreeperSwellMixin",
+    "MobDecoyTargetMixin"
   ],
   "injectors": {
     "defaultRequire": 1

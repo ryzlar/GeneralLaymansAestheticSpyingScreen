@@ -894,6 +894,118 @@ public class GlassClientGameTest implements FabricClientGameTest
         context.takeScreenshot("minimap_off_again");
     }
 
+    /**
+     * GLASS_TEST_ONLY=decoy: the Nano Decoy in the hand and in the inventory, then thrown: it lands, its figure builds
+     * up, draws two husks (no zombies: they burn at noon) and a creeper (which does not blow up), glitches when hit, stands where it was projected and collapses.
+     */
+    private static void decoy(TestSingleplayerContext singleplayer, ClientGameTestContext context, TestServerContext server)
+    {
+        if(!ryzlar.glass.decoy.NanoDecoyFeature.ENABLED)
+        {
+            LOGGER.info("Nano Decoy switched off (NanoDecoyFeature): its test is skipped");
+            return;
+        }
+        server.runCommand("tp @p 0 -60 0 0 20");
+        server.runCommand("clear @p");
+        server.runCommand("give @p generallaymansaestheticspyingscreen:nano_decoy 4");
+        settle(singleplayer, context);
+        context.waitTicks(20);
+        context.takeScreenshot("decoy_hand");
+        context.runOnClient(mc -> mc.setScreen(new net.minecraft.client.gui.screens.inventory.InventoryScreen(mc.player)));
+        context.waitTicks(5);
+        context.takeScreenshot("decoy_inventory");
+        context.runOnClient(mc -> mc.setScreen(null));
+        context.waitTicks(5);
+        server.runOnServer(s -> {
+            ServerPlayer player = player(s);
+            ryzlar.glass.decoy.NanoDecoy.NANO_DECOY.use(s.overworld(), player, net.minecraft.world.InteractionHand.MAIN_HAND);
+        });
+        context.waitTicks(2);
+        int left = context.computeOnClient(mc -> mc.player.getMainHandItem().getCount());
+        check(left == 3, "one decoy used up (3 left): " + left);
+        boolean waiting = context.computeOnClient(mc -> mc.player.getCooldowns().isOnCooldown(mc.player.getMainHandItem()));
+        check(waiting, "the next decoy waits for its cooldown");
+        for(int t = 0; t <= 9; t += 3)
+        {
+            context.takeScreenshot(String.format("decoy_fly_t%02d", t));
+            context.waitTicks(3);
+        }
+        //It lands and its lens pops up; then the figure builds up from the feet. Seen from the side, a little ahead.
+        Vec3 at = context.computeOnClient(mc -> mc.level.getEntitiesOfClass(ryzlar.glass.decoy.NanoDecoyBall.class,
+                mc.player.getBoundingBox().inflate(40D)).stream().findFirst().map(net.minecraft.world.entity.Entity::position).orElse(Vec3.ZERO));
+        LOGGER.info("decoy landed at {}", at);
+        lookFrom(server, at.add(3.5D, 1.6D, 4.5D), at.add(0D, 0.9D, 1D));
+        for(int t = 0; t <= 28; t += 4)
+        {
+            context.takeScreenshot(String.format("decoy_build_t%02d", t));
+            context.waitTicks(4);
+        }
+        //Monsters near it go for it, not for the player; a creeper reaches it and does not blow up.
+        server.runCommand(String.format(java.util.Locale.ROOT, "summon minecraft:husk %.1f %.1f %.1f", at.x - 8D, at.y, at.z + 2D));
+        server.runCommand(String.format(java.util.Locale.ROOT, "summon minecraft:husk %.1f %.1f %.1f", at.x + 8D, at.y, at.z + 4D));
+        server.runCommand(String.format(java.util.Locale.ROOT, "summon minecraft:creeper %.1f %.1f %.1f", at.x + 6D, at.y, at.z + 8D));
+        context.waitTicks(50);
+        Vec3 figure = figureAt(context);
+        lookFrom(server, figure.add(4D, 1.6D, 4D), figure.add(0D, 0.9D, 0D));
+        context.waitTicks(3);
+        context.takeScreenshot("decoy_lure");
+        long lured = server.computeOnServer(s -> s.overworld().getEntitiesOfClass(net.minecraft.world.entity.Mob.class,
+                player(s).getBoundingBox().inflate(40D)).stream().filter(m -> m.getTarget() instanceof ryzlar.glass.decoy.NanoDecoyFigure).count());
+        check(lured == 3, "both husks and the creeper go for the decoy: " + lured);
+        //Hit, it glitches and drops a few cubes, but stays.
+        server.runCommand("damage @e[type=generallaymansaestheticspyingscreen:nano_decoy_figure,limit=1] 1 minecraft:player_attack");
+        context.waitTicks(2);
+        context.takeScreenshot("decoy_hit_t02");
+        context.waitTicks(6);
+        context.takeScreenshot("decoy_hit_t08");
+        context.waitTicks(40);
+        figure = figureAt(context);
+        lookFrom(server, figure.add(-3.5D, 1.6D, 3.5D), figure.add(0D, 0.9D, 0D));
+        context.waitTicks(3);
+        context.takeScreenshot("decoy_stand");
+        double moved = figure.distanceTo(at);
+        check(moved < 0.5D, "the decoy stands where it was projected: moved " + moved);
+        boolean creeper = server.computeOnServer(s -> !s.overworld().getEntitiesOfClass(net.minecraft.world.entity.monster.Creeper.class,
+                player(s).getBoundingBox().inflate(40D)).isEmpty());
+        check(creeper, "the creeper did not blow up at the decoy");
+        //Then it collapses from the head down, and the canister fizzles out.
+        long born = server.computeOnServer(s -> s.overworld().getEntitiesOfClass(ryzlar.glass.decoy.NanoDecoyFigure.class,
+                player(s).getBoundingBox().inflate(60D)).stream().findFirst().map(f -> (long)f.age(0F)).orElse(-1L));
+        LOGGER.info("decoy figure age {}", born);
+        context.waitTicks((int)Math.max(0L, ryzlar.glass.decoy.NanoDecoyFigure.BUILD_TICKS + ryzlar.glass.decoy.NanoDecoyFigure.LIFE_TICKS - born - 6));
+        figure = figureAt(context);
+        lookFrom(server, figure.add(3.5D, 1.6D, 3.5D), figure.add(0D, 0.9D, 0D));
+        for(int t = 0; t <= 32; t += 4)
+        {
+            context.takeScreenshot(String.format("decoy_end_t%02d", t));
+            context.waitTicks(4);
+        }
+        context.waitTicks(20);
+        long still = server.computeOnServer(s -> s.overworld().getEntitiesOfClass(net.minecraft.world.entity.Mob.class,
+                player(s).getBoundingBox().inflate(60D)).stream().filter(m -> m.getTarget() instanceof ryzlar.glass.decoy.NanoDecoyFigure).count());
+        check(still == 0, "no mob still goes for the decoy once it is gone: " + still);
+        boolean gone = context.computeOnClient(mc -> mc.level.getEntitiesOfClass(ryzlar.glass.decoy.NanoDecoyBall.class,
+                mc.player.getBoundingBox().inflate(60D)).isEmpty() && mc.level.getEntitiesOfClass(ryzlar.glass.decoy.NanoDecoyFigure.class,
+                mc.player.getBoundingBox().inflate(60D)).isEmpty());
+        check(gone, "the decoy is gone after it fizzled out");
+    }
+
+    /** Where the decoy's figure is now (seen by the client). */
+    private static Vec3 figureAt(ClientGameTestContext context)
+    {
+        return context.computeOnClient(mc -> mc.level.getEntitiesOfClass(ryzlar.glass.decoy.NanoDecoyFigure.class,
+                mc.player.getBoundingBox().inflate(60D)).stream().findFirst().map(net.minecraft.world.entity.Entity::position).orElse(Vec3.ZERO));
+    }
+
+    /** Puts the player's eyes at {@code eye}, looking at {@code target}. */
+    private static void lookFrom(TestServerContext server, Vec3 eye, Vec3 target)
+    {
+        Vec3 d = target.subtract(eye);
+        float yaw = (float)Math.toDegrees(Math.atan2(-d.x, d.z));
+        float pitch = (float)Math.toDegrees(-Math.atan2(d.y, Math.hypot(d.x, d.z)));
+        server.runCommand(String.format(java.util.Locale.ROOT, "tp @p %.2f %.2f %.2f %.1f %.1f", eye.x, eye.y - 1.62D, eye.z, yaw, pitch));
+    }
+
     /** Makes a channel at the terminal at {@code pos}, like the camera screen does. Returns its id. */
     private static String create(MinecraftServer server, BlockPos pos, String name, String password)
     {
@@ -940,6 +1052,11 @@ public class GlassClientGameTest implements FabricClientGameTest
             server.runCommand("gamerule doDaylightCycle false");
             server.runCommand("gamerule doWeatherCycle false");
             server.runCommand("weather clear");
+            if("decoy".equals(System.getenv("GLASS_TEST_ONLY")))
+            {
+                decoy(singleplayer, context, server);
+                return;
+            }
             //GLASS_TEST_ONLY=cloak: only the cloak field, looked at from many sides (quick, to chase a cloak bug).
             //GLASS_TEST_ONLY=cloakshaders: the same, as with a shader pack on (no views), filming it switching on and off.
             if("cloakshaders".equals(System.getenv("GLASS_TEST_ONLY")))
