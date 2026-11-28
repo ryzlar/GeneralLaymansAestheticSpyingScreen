@@ -382,7 +382,12 @@ public class GlassClientGameTest implements FabricClientGameTest
         check(context.computeOnClient(mc -> {
             net.minecraft.world.item.CreativeModeTabs.tryRebuildTabContents(mc.player.connection.enabledFeatures(), true, mc.level.registryAccess());
             net.minecraft.world.item.CreativeModeTab tab = net.minecraft.core.registries.BuiltInRegistries.CREATIVE_MODE_TAB.getValue(GlassRegistry.TAB);
-            return tab != null && tab.getDisplayItems().size() == 11 && tab.getDisplayItems().iterator().next().is(GlassRegistry.GLASS_TOME);
+            int expected = 11 + (ryzlar.glass.decoy.NanoDecoyFeature.ENABLED ? 1 : 0);
+            if(tab != null && tab.getDisplayItems().size() != expected)
+            {
+                ryzlar.glass.Glass.LOGGER.error("GLASS tab has {} items, expected {}", tab.getDisplayItems().size(), expected);
+            }
+            return tab != null && tab.getDisplayItems().size() == expected && tab.getDisplayItems().iterator().next().is(GlassRegistry.GLASS_TOME);
         }), "GLASS has its own creative tab, the tome first");
         check(context.computeOnClient(mc -> ryzlar.glass.client.tome.TomeRecipes.of(ryzlar.glass.Glass.id("glass_projector")) != null
                 && ryzlar.glass.client.tome.TomeRecipes.of(ryzlar.glass.Glass.id("glass_tome")) != null), "the tome reads the mod's recipes");
@@ -392,7 +397,9 @@ public class GlassClientGameTest implements FabricClientGameTest
                 && screen.page().id().equals("amplifier")), "looking up an item opens its page");
         for(ryzlar.glass.client.tome.TomeBook.Page page : context.computeOnClient(mc -> ryzlar.glass.client.tome.TomeBook.get().pages()))
         {
-            if(!all && !List.of("welcome", "cloak", "holo_cube").contains(page.id()))
+            //GLASS_TOME_PAGE=<id>: only that page's shots.
+            String onlyPage = System.getenv("GLASS_TOME_PAGE");
+            if(onlyPage != null ? !onlyPage.equals(page.id()) : !all && !List.of("welcome", "cloak", "holo_cube").contains(page.id()))
             {
                 continue;
             }
@@ -944,6 +951,8 @@ public class GlassClientGameTest implements FabricClientGameTest
         server.runCommand(String.format(java.util.Locale.ROOT, "summon minecraft:husk %.1f %.1f %.1f", at.x - 8D, at.y, at.z + 2D));
         server.runCommand(String.format(java.util.Locale.ROOT, "summon minecraft:husk %.1f %.1f %.1f", at.x + 8D, at.y, at.z + 4D));
         server.runCommand(String.format(java.util.Locale.ROOT, "summon minecraft:creeper %.1f %.1f %.1f", at.x + 6D, at.y, at.z + 8D));
+        //A calm enderman (a neutral mob) is left alone: it would go for the decoy only if it were angry at the player.
+        server.runCommand(String.format(java.util.Locale.ROOT, "summon minecraft:enderman %.1f %.1f %.1f {NoAI:1b}", at.x - 5D, at.y, at.z - 5D));
         context.waitTicks(50);
         Vec3 figure = figureAt(context);
         lookFrom(server, figure.add(4D, 1.6D, 4D), figure.add(0D, 0.9D, 0D));
@@ -951,7 +960,7 @@ public class GlassClientGameTest implements FabricClientGameTest
         context.takeScreenshot("decoy_lure");
         long lured = server.computeOnServer(s -> s.overworld().getEntitiesOfClass(net.minecraft.world.entity.Mob.class,
                 player(s).getBoundingBox().inflate(40D)).stream().filter(m -> m.getTarget() instanceof ryzlar.glass.decoy.NanoDecoyFigure).count());
-        check(lured == 3, "both husks and the creeper go for the decoy: " + lured);
+        check(lured == 3, "both husks and the creeper go for the decoy, the calm enderman does not: " + lured);
         //Hit, it glitches and drops a few cubes, but stays.
         server.runCommand("damage @e[type=generallaymansaestheticspyingscreen:nano_decoy_figure,limit=1] 1 minecraft:player_attack");
         context.waitTicks(2);

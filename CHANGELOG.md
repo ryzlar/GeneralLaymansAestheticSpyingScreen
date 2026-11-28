@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.4.0+1.21.8
+
+Client and server both need 1.4.0: a 1.3.0 client is told to update when it joins a 1.4.0 server.
+
+### New
+
+- **Nano Decoy**: a ball you throw. It lands, opens into a glowing hexagon base and projects a nano copy of you (your
+  skin in small cubes, your name above it). For 13 seconds hostile mobs and mobs angry at you within 16 blocks go for
+  it instead of you, the Warden included; they swing straight through it and creepers do not explode. Hit, it glitches
+  and drops cubes; at the end it falls apart into nano pixels. Stacks to 4, 20 seconds' cooldown. Made from a diamond,
+  an amethyst shard, tinted glass, an ender pearl and a GLASS Extension. The GLASS Tome has a page about it, with a 3D
+  scene.
+- **JourneyMap support**: from outside a cloak, its build no longer shows on JourneyMap's minimap and fullscreen map.
+- **Entity Culling support**: mobs hidden from you by a wall still show on camera screens and through cloaks, and the
+  holo cube's bubble is never culled.
+
+### Changed
+
+- **New sound going through a cloak**: one steady nano fizz as you pass through a cloak field's wall.
+- A cloak field has no bottom: going in or out underneath makes no ripple or sound, from below you see your real build,
+  and from up to 10 blocks under it its walls show from the inside.
+
+### Fixed
+
+- No more FPS drop while a cloak field switches off: it is now as smooth as switching on.
+- The end of a glass cloak wall no longer shows a wedge of sky when looked at from the side.
+- Two sounds played at once when going through a cloak.
+
 ## 1.3.0+1.21.8
 
 Client and server both need 1.3.0: a 1.2.0 client is told to update when it joins a 1.3.0 server.

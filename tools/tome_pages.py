@@ -14,6 +14,7 @@ CHAPTERS = [
     ("Cloak", ["cloak", "cloak_field", "amplifier"]),
     ("Hologram kit", ["holo_scanner", "holo_projector"]),
     ("Holo Cube", ["holo_cube", "holo_cube_bubble"]),
+    ("Nano Decoy", ["nano_decoy"]),
 ]
 
 PAGES = {
@@ -172,6 +173,20 @@ PAGES = {
             "It is only a picture over the real world, which is never touched. Where the real world is empty you can stand on the "
             "scan's ground; you walk straight through the rest. Use a scanned chest to look inside it.",
             "Right-click again to switch it off.",
+        ]),
+    "nano_decoy": dict(
+        title="Nano Decoy",
+        items=["nano_decoy"],
+        scene="decoy",
+        body=[
+            "Right-click to throw it. It lands, opens into a glowing hexagon base and projects a nano copy of you: your skin "
+            "built out of small cubes, with your name above it.",
+            "For 13 seconds the hostile mobs within 16 blocks go for it instead of you, and so do the mobs angry at you "
+            "(wolves, endermen, piglins, golems, the Warden). They swing straight through it, and creepers do not explode at it.",
+            "Nothing can break it: hit, it glitches and drops a few cubes. At the end it falls apart into nano pixels and the "
+            "mobs look for you again.",
+            "It is used up when thrown, stacks to 4, and the next one can be thrown after 20 seconds.",
+            {"recipe": "nano_decoy"},
         ]),
 }
 

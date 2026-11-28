@@ -156,7 +156,9 @@ public class NanoDecoyFigure extends LivingEntity
             boolean angry = owner != null && (mob.getTarget() == owner
                     || mob instanceof NeutralMob neutral && owner.getUUID().equals(neutral.getPersistentAngerTarget())
                     || attackTarget(mob) == owner);
-            if(!(mob instanceof Enemy) && !angry)
+            //Neutral mobs (endermen, zombified piglins, piglins) count as monsters too, but only come when they are angry.
+            boolean neutral = mob instanceof NeutralMob || mob instanceof net.minecraft.world.entity.monster.piglin.Piglin;
+            if(!angry && (!(mob instanceof Enemy) || neutral))
             {
                 continue;
             }

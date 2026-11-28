@@ -44,7 +44,8 @@ public final class TomeScenes
             "amplifier", new AmplifierScene(),
             "hologram", new HologramScene(),
             "cube_scan", new CubeScanScene(),
-            "cube_bubble", new CubeBubbleScene());
+            "cube_bubble", new CubeBubbleScene(),
+            "decoy", new DecoyScene());
 
     private TomeScenes() {}
 
@@ -485,6 +486,153 @@ public final class TomeScenes
             return t < 3F ? "No amplifier: a field up to 32x32, 16 high"
                     : t < 6F ? "One amplifier touching the projector: up to 48x48, 24 high"
                     : "Two amplifiers: up to 64x64, 32 high";
+        }
+    }
+
+    // ---- Nano Decoy ----
+
+    /**
+     * A Nano Decoy is thrown, lands and opens into a hexagon base, and projects a nano copy of its thrower, built up cube by
+     * cube. Two zombies come for it and swing at nothing; hit, it glitches; at the end it falls apart from the top down.
+     */
+    private static final class DecoyScene implements Scene
+    {
+        private static final float THROWN = 1.2F, OPEN = 1.8F, BUILT = 3.4F, COLLAPSE = 8.4F, GONE = 9.6F;
+        /** One pixel of a player's skin, in blocks (the copy is a little smaller than a player). */
+        private static final float PX = 0.05F;
+        /** A player's body in skin pixels, centred on its feet: x0, y0, z0, x1, y1, z1 (legs, body, arms, head). */
+        private static final int[][] BODY = {
+                { -4, 0, -2, 0, 12, 2 }, { 0, 0, -2, 4, 12, 2 },
+                { -4, 12, -2, 4, 24, 2 },
+                { -8, 12, -2, -4, 24, 2 }, { 4, 12, -2, 8, 24, 2 },
+                { -4, 24, -4, 4, 32, 4 },
+        };
+        /** A zombie's colours for each part of {@link #BODY}. */
+        private static final int[] ZOMBIE = { 0xFF3B3F9E, 0xFF3B3F9E, 0xFF2A8C8C, 0xFF4F8A3A, 0xFF4F8A3A, 0xFF4F8A3A };
+        private static final BlockState CUBE = Blocks.WHITE_CONCRETE.defaultBlockState();
+
+        @Override
+        public float length()
+        {
+            return 11F;
+        }
+
+        @Override
+        public Vec3 centre()
+        {
+            return new Vec3(5.2D, 0.9D, 4.5D);
+        }
+
+        @Override
+        public float size()
+        {
+            return 5.5F;
+        }
+
+        @Override
+        public void draw(SceneDraw d, float t)
+        {
+            d.ground(0, 0, 9, 9, GRASS);
+            float x = 4.5F, z = 4.5F;
+            //Thrown in an arc from the left, tumbling; it lands and stands.
+            ItemStack decoy = new ItemStack(net.minecraft.core.registries.BuiltInRegistries.ITEM.getValue(ryzlar.glass.Glass.id("nano_decoy")));
+            if(t < THROWN)
+            {
+                float f = t / THROWN;
+                d.item(decoy, 0.8F + (x - 0.8F) * f, 0.25F + 3.5F * f * (1F - f) + (1F - f) * 1.3F, z, 0.5F, t * 720F);
+            }
+            else if(t < GONE)
+            {
+                d.item(decoy, x, 0.25F - step(t, COLLAPSE, 1.2F) * 0.2F, z, 0.5F * (1F - step(t, GONE - 0.4F, 0.4F)), 0F);
+            }
+            //The hexagon base opens round it, turning.
+            float open = step(t, THROWN, OPEN - THROWN) * (1F - step(t, COLLAPSE + 0.6F, 0.6F));
+            if(open > 0F)
+            {
+                float r = 0.75F * open, turn = t * 0.6F;
+                for(int i = 0; i < 6; i++)
+                {
+                    float a0 = turn + i * Mth.PI / 3F, a1 = turn + (i + 1) * Mth.PI / 3F;
+                    d.line(x + r * Mth.cos(a0), 0.03F, z + r * Mth.sin(a0), x + r * Mth.cos(a1), 0.03F, z + r * Mth.sin(a1), CYAN);
+                    d.line(x + r * 0.6F * Mth.cos(-a0), 0.05F, z + r * 0.6F * Mth.sin(-a0), x + r * 0.6F * Mth.cos(-a1), 0.05F,
+                            z + r * 0.6F * Mth.sin(-a1), CYAN_GLOW);
+                }
+            }
+            //The copy: built from the feet up, hit once (it glitches), and falling apart from the top down.
+            float hover = 0.3F + Mth.sin(t * 2.5F) * 0.03F;
+            float built = step(t, OPEN, BUILT - OPEN), gone = step(t, COLLAPSE, GONE - COLLAPSE);
+            boolean glitch = t > 6F && t < 6.5F;
+            if(built > 0F && gone < 1F)
+            {
+                figure(d, x + (glitch ? (hash(t * 40F) - 0.5F) * 0.12F : 0F), hover, z, 2, PX, null, built, gone, t);
+            }
+            //Two zombies come for it and stop at it; once it is gone they wander off.
+            float walk = step(t, 2.6F, 3F), lost = step(t, GONE, 1F);
+            for(int i = 0; i < 2; i++)
+            {
+                float side = i == 0 ? -1F : 1F;
+                float zx = 8.3F - walk * 2.9F + lost * 0.6F;
+                float zz = z + side * (2.6F - walk * 1.9F);
+                figure(d, zx, 0F, zz, 4, PX * 0.95F, ZOMBIE, 1F, 0F, t);
+            }
+        }
+
+        /**
+         * A player-shaped figure of small cubes, {@code step} skin pixels each: flickering cyan nano cubes (its shell only),
+         * or solid, one colour per body part. {@code built}: how far up it is there; {@code gone}: how far down it has
+         * fallen apart.
+         */
+        private static void figure(SceneDraw d, float x, float y, float z, int step, float px, @Nullable int[] colours,
+                                   float built, float gone, float t)
+        {
+            float size = step * px;
+            for(int p = 0; p < BODY.length; p++)
+            {
+                int[] b = BODY[p];
+                for(int cx = b[0]; cx < b[3]; cx += step)
+                {
+                    for(int cy = b[1]; cy < b[4]; cy += step)
+                    {
+                        for(int cz = b[2]; cz < b[5]; cz += step)
+                        {
+                            boolean shell = cx == b[0] || cx + step >= b[3] || cy == b[1] || cy + step >= b[4] || cz == b[2] || cz + step >= b[5];
+                            float up = cy / 32F;
+                            if(!shell || up > built || gone > 0F && up >= 1F - gone)
+                            {
+                                continue;
+                            }
+                            int argb;
+                            if(colours != null)
+                            {
+                                argb = colours[p];
+                            }
+                            else
+                            {
+                                float n = hash(cx * 31F + cy * 7F + cz * 13F + Mth.floor(t * 6F) * 0.37F);
+                                argb = (int)((0.45F + 0.4F * n) * 255F) << 24 | 0x3CE6FF;
+                            }
+                            d.holo(CUBE, x + cx * px, y + cy * px, z + cz * px, size * 0.9F, argb);
+                        }
+                    }
+                }
+            }
+        }
+
+        private static float hash(float n)
+        {
+            float s = Mth.sin(n * 12.9898F) * 43758.547F;
+            return s - Mth.floor(s);
+        }
+
+        @Override
+        public String caption(float t)
+        {
+            return t < OPEN ? "Throw a Nano Decoy: it lands and opens"
+                    : t < BUILT ? "It projects a nano copy of you, with your name above it"
+                    : t < 6F ? "For 13 seconds hostile mobs within 16 blocks go for it"
+                    : t < 6.6F ? "They swing straight through it: hit, it glitches"
+                    : t < COLLAPSE ? "Mobs angry at you come too, the Warden included"
+                    : "At the end it falls apart into nano pixels";
         }
     }
 

@@ -38,6 +38,12 @@
         "holo_cube",
         "holo_cube_bubble"
       ]
+    },
+    {
+      "title": "Nano Decoy",
+      "pages": [
+        "nano_decoy"
+      ]
     }
   ]
 }
