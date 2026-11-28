@@ -350,12 +350,12 @@ public class GlassBlockEntityRenderer implements BlockEntityRenderer<GlassBaseBl
     private static Direction edgeView(@org.jetbrains.annotations.Nullable TerminalPlacement placement, List<Direction> faces,
                                       Direction edge, BlockPos pos, Vec3 eye)
     {
-        Direction best = faces.getFirst();
         if(placement == null)
         {
-            return best;
+            return faces.getFirst();
         }
         Vec3 centre = Vec3.atCenterOf(pos);
+        Direction best = null;
         double bestToward = Double.NEGATIVE_INFINITY;
         for(Direction side : placement.screenSides())
         {
@@ -364,13 +364,16 @@ public class GlassBlockEntityRenderer implements BlockEntityRenderer<GlassBaseBl
                 continue;
             }
             double toward = (eye.x - centre.x) * side.getStepX() + (eye.y - centre.y) * side.getStepY() + (eye.z - centre.z) * side.getStepZ();
-            if(toward > bestToward)
+            //Only a side the eye is in front of: from behind its face (e.g. standing in line with a wall, looking at its
+            //end) its view is cut by a plane running almost along the eye's line, which left a wedge of sky.
+            if(toward > 0.5D && toward > bestToward)
             {
                 best = side;
                 bestToward = toward;
             }
         }
-        return best;
+        //In front of none of them: the end's own view, which looks along the wall into what lies beyond it.
+        return best != null ? best : edge;
     }
 
     /** The screen faces plus the faces across them (a wall's edges); not the back, which faces into what is hidden. */

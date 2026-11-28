@@ -310,13 +310,19 @@ public class TerminalPlacement
                 outer = Math.max(outer, along);
             }
         }
-        if(outer == Double.NEGATIVE_INFINITY)
+        //An end of the screen (no glass faces this way, e.g. the narrow end of a wall, looked at from beside the wall's
+        //front): it hides just the glass, from its outermost block back to the other end, so through it the eye looks
+        //along the wall into what lies beyond, not into the cloak's depth behind the front.
+        boolean end = outer == Double.NEGATIVE_INFINITY;
+        if(end)
         {
-            outer = along(master.getBlockPos(), side);
-            min = Math.min(min, outer);
-            max = Math.max(max, outer);
+            if(min == Double.POSITIVE_INFINITY)
+            {
+                min = max = along(master.getBlockPos(), side);
+            }
+            outer = max;
         }
-        double depth = Math.max(master.cloakDepth, max - min + 1D);
+        double depth = end ? max - min + 1D : Math.max(master.cloakDepth, max - min + 1D);
         //Distance of the plane along the side's normal: the outer face (block centre + 0.5) minus the depth, plus a hair
         //towards the viewer so the faces of blocks right behind the hidden part are kept (see the camera clip plane).
         double plane = outer + 0.5D - depth + CLIP_MARGIN;
@@ -327,6 +333,10 @@ public class TerminalPlacement
         cullRender = true;
         hidden = hiddenBox(side, plane - CLIP_MARGIN, outer + 0.5D);
         CloakFill.Area area = side.getAxis().isHorizontal() ? areaOf(side, outer, (int)Math.round(depth)) : null;
+        if(area != null && end)
+        {
+            area = area.withRealGround(); //only the glass is hidden: the ground under it is real
+        }
         hiderArea = area;
         fill = area == null ? null : new CloakFill(area);
     }

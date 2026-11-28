@@ -1006,6 +1006,53 @@ public class GlassClientGameTest implements FabricClientGameTest
         server.runCommand(String.format(java.util.Locale.ROOT, "tp @p %.2f %.2f %.2f %.1f %.1f", eye.x, eye.y - 1.62D, eye.z, yaw, pitch));
     }
 
+    /**
+     * GLASS_TEST_ONLY=glasswall: the user's build, block for block (read from their world): a cloak on a 4x3 wall of
+     * normal extensions, the projector in its bottom west corner switched on by a lever, stone right behind it, gold
+     * behind that and a gold wall further back. Seen from where they saw a wedge of sky in it: from the east, the eye
+     * inside the wall's thickness, looking along it at its narrow end, then from around there.
+     */
+    private static void glassWall(TestSingleplayerContext singleplayer, ClientGameTestContext context, TestServerContext server)
+    {
+        server.runCommand("fill 60 -61 20 110 -61 60 minecraft:grass_block");
+        server.runCommand("fill 60 -60 20 110 -50 60 minecraft:air");
+        server.runCommand("fill 79 -60 37 84 -57 37 minecraft:gold_block");
+        server.runCommand("fill 80 -60 39 83 -58 39 minecraft:gold_block");
+        server.runCommand("fill 80 -60 40 83 -58 40 minecraft:stone");
+        server.runCommand("fill 80 -60 41 83 -58 41 generallaymansaestheticspyingscreen:glass_extension");
+        server.runCommand("setblock 80 -60 41 generallaymansaestheticspyingscreen:glass_projector{placingFace:\"south\"}");
+        context.waitTicks(2);
+        BlockPos projectorPos = new BlockPos(80, -60, 41);
+        server.runOnServer(s -> {
+            GlassProjectorBlockEntity projector = (GlassProjectorBlockEntity)s.overworld().getBlockEntity(projectorPos);
+            projector.cloak = true;
+            projector.sync();
+        });
+        server.runCommand("gamemode spectator @p");
+        server.runCommand("tp @p 81.5 -59 50 180 5");
+        settle(singleplayer, context);
+        server.runCommand("setblock 80 -60 42 minecraft:lever[face=wall,facing=south,powered=true]");
+        context.waitTicks(80);
+        context.takeScreenshot("glasswall_front");
+        //Their spot (feet x, y, z, yaw, pitch from F3), then round it.
+        double[][] views = {
+                { 86.582, -58.21079, 41.267, 86.2, 8.1 },
+                { 86.582, -58.21079, 41.6, 86.2, 8.1 },
+                { 86.582, -58.21079, 41.9, 86.2, 8.1 },
+                { 86.582, -58.21079, 42.3, 86.2, 8.1 },
+                { 90.0, -58.2, 41.5, 90, 5 },
+                { 85.2, -59.0, 41.5, 88, 15 },
+                { 76.4, -58.2, 41.5, 270, 8 },
+        };
+        for(int i = 0; i < views.length; i++)
+        {
+            double[] v = views[i];
+            server.runCommand(String.format(java.util.Locale.ROOT, "tp @p %.3f %.5f %.3f %.1f %.1f", v[0], v[1], v[2], v[3], v[4]));
+            context.waitTicks(20);
+            context.takeScreenshot(String.format("glasswall_side_%d", i));
+        }
+    }
+
     /** Makes a channel at the terminal at {@code pos}, like the camera screen does. Returns its id. */
     private static String create(MinecraftServer server, BlockPos pos, String name, String password)
     {
@@ -1052,6 +1099,11 @@ public class GlassClientGameTest implements FabricClientGameTest
             server.runCommand("gamerule doDaylightCycle false");
             server.runCommand("gamerule doWeatherCycle false");
             server.runCommand("weather clear");
+            if("glasswall".equals(System.getenv("GLASS_TEST_ONLY")))
+            {
+                glassWall(singleplayer, context, server);
+                return;
+            }
             if("decoy".equals(System.getenv("GLASS_TEST_ONLY")))
             {
                 decoy(singleplayer, context, server);

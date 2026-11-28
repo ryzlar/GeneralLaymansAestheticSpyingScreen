@@ -180,7 +180,7 @@ public final class ScreenBack
         SHOCKS.keySet().retainAll(active);
     }
 
-    /** A ripple on the outside of a cloak field (its image), at most every {@link #TOUCH_REPEAT} ticks. */
+    /** A ripple on the outside of a cloak field (its image), at most every {@link #TOUCH_REPEAT} ticks; silent. */
     private static void touchFront(String key, Vec3 point, long now)
     {
         GlassClientState.Punch last = GlassClientState.INSTANCE.punchFor(key);
@@ -188,13 +188,8 @@ public final class ScreenBack
         {
             return;
         }
+        //Seen, not heard: going through has its own sound (see ripple), touching makes none.
         GlassClientState.INSTANCE.addPunch(key, point);
-        Minecraft mc = Minecraft.getInstance();
-        if(mc.level != null)
-        {
-            mc.level.playLocalSound(point.x, point.y, point.z, ryzlar.glass.GlassSounds.RIPPLE, net.minecraft.sounds.SoundSource.BLOCKS,
-                    0.35F, 0.9F + mc.level.random.nextFloat() * 0.2F, false);
-        }
     }
 
     private static void shock(String key, Vec3 point, long now, boolean entering)
@@ -285,8 +280,13 @@ public final class ScreenBack
         Minecraft mc = Minecraft.getInstance();
         if(mc.level != null)
         {
-            mc.level.playLocalSound(point.x, point.y, point.z, ryzlar.glass.GlassSounds.RIPPLE, net.minecraft.sounds.SoundSource.BLOCKS,
-                    through ? 0.7F : 0.35F, 0.9F + mc.level.random.nextFloat() * 0.2F, false);
+            //Going through: the steady nano fizz, the same every time. Brushing against it ripples without a sound
+            //(it did make one, which played on top of this one just before and after going through).
+            if(through)
+            {
+                mc.level.playLocalSound(point.x, point.y, point.z, ryzlar.glass.GlassSounds.FIELD_PASS, net.minecraft.sounds.SoundSource.BLOCKS,
+                        0.7F, 1F, false);
+            }
         }
     }
 
