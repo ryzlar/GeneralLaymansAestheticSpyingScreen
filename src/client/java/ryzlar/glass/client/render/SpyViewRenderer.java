@@ -432,6 +432,7 @@ public final class SpyViewRenderer
         Iterator<SpyView> ite = views.values().iterator();
         List<SpyView> toRender = new ArrayList<>();
         List<SpyView> cloaks = new ArrayList<>();
+        List<SpyView> fading = new ArrayList<>();
         Matrix4f mainViewProjection = new Matrix4f(mainProjection).mul(new Matrix4f().rotation(mainCamera.rotation().conjugate(new Quaternionf())));
         while(ite.hasNext())
         {
@@ -455,6 +456,13 @@ public final class SpyViewRenderer
             {
                 cloaks.add(view);
             }
+            else if(switchingOff && view.placement.cloak)
+            {
+                //A cloak switching off: drawn whole, its sides taking turns (a field has five, and drawing them all every
+                //frame made its switch-off far slower than its switch-on, where only what shows is drawn).
+                view.cropped = false;
+                fading.add(view);
+            }
             else if(!view.isSteadyCloak(thisFrame, switchingOff))
             {
                 //A screen, or a cloak switching off or wiping over another feed: drawn whole, every frame.
@@ -464,6 +472,11 @@ public final class SpyViewRenderer
         }
         //The cloaks most in need first: an image that no longer covers the glass, then the nearest and biggest on screen
         //by how overdue they are. The rest keep their last image this frame.
+        fading.sort((a, b) -> Long.compare(a.drawnFrame, b.drawnFrame));
+        for(int i = 0; i < fading.size() && i < CLOAK_VIEWS_PER_FRAME; i++)
+        {
+            toRender.add(fading.get(i));
+        }
         cloaks.sort((a, b) -> Float.compare(b.priority, a.priority));
         for(int i = 0; i < cloaks.size() && i < CLOAK_VIEWS_PER_FRAME; i++)
         {
