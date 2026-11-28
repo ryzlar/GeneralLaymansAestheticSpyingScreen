@@ -34,7 +34,7 @@ import org.jetbrains.annotations.Nullable;
 public class NanoDecoyFigure extends LivingEntity
 {
     /** How long it takes to build up, how long it lures, and how long it takes to collapse (ticks). */
-    public static final int BUILD_TICKS = 28, LIFE_TICKS = 8 * 20, COLLAPSE_TICKS = 28;
+    public static final int BUILD_TICKS = 28, LIFE_TICKS = 13 * 20, COLLAPSE_TICKS = 28;
     public static final int TOTAL_TICKS = BUILD_TICKS + LIFE_TICKS + COLLAPSE_TICKS;
     /** How far it draws mobs from (blocks), and how often it calls them (ticks). */
     private static final double LURE_RANGE = 16D;

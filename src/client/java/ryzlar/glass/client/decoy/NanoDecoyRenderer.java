@@ -23,7 +23,7 @@ import ryzlar.glass.decoy.NanoDecoyBall;
  * Draws a thrown Nano Decoy from its Blockbench models (blockbench/nano_decoy*.bbmodel): the ball tumbling through the
  * air; landed, its bottom half sinks into the ground and its top half rises, spins and goes in a flash, while a
  * hexagonal base grows out of the ground and a smaller glowing hexagon ring comes up over it, turning and bobbing (the
- * figure hovers above that ring). Going, the ring and the base shrink away.
+ * figure hovers above that ring). Its time up, the ring and the base fall apart into particles in their own shape.
  * <p>
  * Java models turn only in 22.5 degree steps, so the hexagons are put together here from one piece turned 60 degrees
  * at a time: three bars make the base's plate, six sides its glowing edge, six sides the ring.
@@ -40,7 +40,7 @@ public class NanoDecoyRenderer extends EntityRenderer<NanoDecoyBall, NanoDecoyRe
     /** How long the landing shockwave runs (ticks) and how far it reaches (blocks). */
     private static final float WAVE_TICKS = 12F, WAVE_REACH = 1.4F;
 
-    private static final ItemStack WHOLE = part("nano_decoy");
+    private static final ItemStack WHOLE = part("nano_decoy_ball");
     private static final ItemStack TOP = part("nano_decoy_top");
     private static final ItemStack BOTTOM = part("nano_decoy_bottom");
     private static final ItemStack PLATE = part("nano_decoy_plate");
@@ -97,7 +97,8 @@ public class NanoDecoyRenderer extends EntityRenderer<NanoDecoyBall, NanoDecoyRe
             float time = entity.level().getGameTime() + partialTick - landedAt;
             state.sinceLanded = time;
             float closing = time - NanoDecoyBall.OPEN_TICKS - NanoDecoyBall.STAND_TICKS;
-            state.gone = Math.clamp(closing / NanoDecoyBall.CLOSE_TICKS, 0F, 1F);
+            //Its time up, the hexagons are gone at once: they fall apart into particles (see NanoDecoyBall).
+            state.gone = closing >= 0F ? 1F : 0F;
             itemModels.updateForNonLiving(state.top, TOP, ItemDisplayContext.NONE, entity);
             itemModels.updateForNonLiving(state.bottom, BOTTOM, ItemDisplayContext.NONE, entity);
             itemModels.updateForNonLiving(state.plate, PLATE, ItemDisplayContext.NONE, entity);

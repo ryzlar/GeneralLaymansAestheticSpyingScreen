@@ -975,7 +975,7 @@ public class GlassClientGameTest implements FabricClientGameTest
         context.waitTicks((int)Math.max(0L, ryzlar.glass.decoy.NanoDecoyFigure.BUILD_TICKS + ryzlar.glass.decoy.NanoDecoyFigure.LIFE_TICKS - born - 6));
         figure = figureAt(context);
         lookFrom(server, figure.add(3.5D, 1.6D, 3.5D), figure.add(0D, 0.9D, 0D));
-        for(int t = 0; t <= 32; t += 4)
+        for(int t = 0; t <= 52; t += 4)
         {
             context.takeScreenshot(String.format("decoy_end_t%02d", t));
             context.waitTicks(4);

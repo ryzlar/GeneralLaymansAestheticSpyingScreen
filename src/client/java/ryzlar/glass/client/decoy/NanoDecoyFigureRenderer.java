@@ -22,7 +22,7 @@ import net.minecraft.util.Mth;
 import ryzlar.glass.decoy.NanoDecoyFigure;
 
 /**
- * Draws a Nano Decoy's figure: its owner's skin made of nano cubes, each two skin pixels across with a little gap round
+ * Draws a Nano Decoy's figure: its owner's skin made of nano cubes, little blocks two skin pixels across with a gap round
  * it and a cyan glow, hovering above the decoy's floating ring, projected out of it in a cone of light.
  * <ul>
  * <li>Building up, the cubes fly out of the lens in a spiral to their places, feet first, and flash as they land.</li>
@@ -48,7 +48,7 @@ public class NanoDecoyFigureRenderer extends EntityRenderer<NanoDecoyFigure, Nan
     private static final int DROPPED = 6, MOTES = 14;
 
     /** One cube: its body part, its box (model pixels, facing +z, feet at 0) and its faces with their skin pixels. */
-    private record Voxel(int part, float[] box, List<Face> faces, float height, float seed) {}
+    private record Voxel(int part, float[] box, List<Face> faces, List<Face> solid, float height, float seed) {}
 
     /** A face of a cube: which side (0 +z, 1 -z, 2 -x, 3 +x, 4 +y, 5 -y) and its skin pixels (u0, v0, u1, v1). */
     private record Face(int side, float u0, float v0, float u1, float v1) {}
@@ -330,7 +330,7 @@ public class NanoDecoyFigureRenderer extends EntityRenderer<NanoDecoyFigure, Nan
         float[] box = voxel.box;
         float hx = (box[3] - box[0]) / 2F * size, hy = (box[4] - box[1]) / 2F * size, hz = (box[5] - box[2]) / 2F * size;
         float x0 = x - hx, x1 = x + hx, y0 = y - hy, y1 = y + hy, z0 = z - hz, z1 = z + hz;
-        for(Face f : voxel.faces)
+        for(Face f : voxel.solid)
         {
             float u0 = f.u0 / 64F, v0 = f.v0 / 64F, u1 = f.u1 / 64F, v1 = f.v1 / 64F;
             switch(f.side)
@@ -507,10 +507,33 @@ public class NanoDecoyFigureRenderer extends EntityRenderer<NanoDecoyFigure, Nan
                             b[0] - grow + lx1 * gx, b[1] - grow + ly1 * gy, b[2] - grow + lz1 * gz };
                     float height = ((box[1] + box[4]) / 2F) / 32F;
                     float seed = fract((box[0] * 12.9898F + box[1] * 78.233F + box[2] * 37.719F + grow * 11F) * 0.1371F);
-                    voxels.add(new Voxel(partIndex, box, faces, height, seed));
+                    voxels.add(new Voxel(partIndex, box, faces, solid(faces), height, seed));
                 }
             }
         }
+    }
+
+    /**
+     * A cube's six sides, so it is a little block of its own (seen through the gaps round it): the sides on the
+     * outside of the body show their own skin, the ones inside the colour of the cube's first outer side.
+     */
+    private static List<Face> solid(List<Face> faces)
+    {
+        List<Face> all = new ArrayList<>(6);
+        Face first = faces.get(0);
+        for(int side = 0; side < 6; side++)
+        {
+            Face own = null;
+            for(Face f : faces)
+            {
+                if(f.side == side)
+                {
+                    own = f;
+                }
+            }
+            all.add(own != null ? own : new Face(side, first.u0, first.v0, first.u1, first.v1));
+        }
+        return all;
     }
 
     /** Where to cut a length into pieces of two (the last one shorter for an odd length). */

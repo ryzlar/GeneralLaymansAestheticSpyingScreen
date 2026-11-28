@@ -6,7 +6,6 @@ import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MoverType;
@@ -14,7 +13,6 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
-import ryzlar.glass.GlassSounds;
 
 /**
  * A thrown Nano Decoy. It flies, tumbling, and stops where it lands; it opens into a hexagonal base with a floating ring
@@ -32,7 +30,6 @@ public class NanoDecoyBall extends Projectile
     private static final double GRAVITY = 0.045D;
     /** It lands at the latest this long after being thrown (ticks). */
     private static final int MAX_FLIGHT = 200;
-    private static final DustParticleOptions SPARK = new DustParticleOptions(0x5FF4FF, 0.8F);
 
     /** The game time it landed (-1: still flying), and the way it faces (the way it was thrown). */
     private static final EntityDataAccessor<Long> LANDED = SynchedEntityData.defineId(NanoDecoyBall.class, EntityDataSerializers.LONG);
@@ -41,8 +38,12 @@ public class NanoDecoyBall extends Projectile
     private static final DustParticleOptions TRAIL = new DustParticleOptions(0x3FD8FF, 0.6F);
 
     private int age;
-    /** On the client: whether its landing burst was shown. */
-    private boolean burst;
+    /** On the client: whether its landing burst was shown, and whether its hexagons fell apart. */
+    private boolean burst, dissolved;
+    private static final DustParticleOptions PLATE_DUST = new DustParticleOptions(0x9AA6B8, 0.7F);
+    private static final DustParticleOptions RIM_DUST = new DustParticleOptions(0x5FF4FF, 0.9F);
+    /** The hexagons (blocks): the base's apothem, the ring's, and the ring's height (see the client's NanoDecoyRenderer). */
+    private static final double BASE_APOTHEM = 6D / 16D, RING_APOTHEM = 3.6D / 16D, RING_HEIGHT = 6D / 16D;
     /** On the client: how far it has tumbled (radians), last tick and now. */
     public float roll, rollO;
 
@@ -124,7 +125,6 @@ public class NanoDecoyBall extends Projectile
     {
         setDeltaMovement(Vec3.ZERO);
         entityData.set(LANDED, level().getGameTime());
-        level().playSound(null, getX(), getY(), getZ(), GlassSounds.NANO_ASSEMBLE, SoundSource.PLAYERS, 0.8F, 1.4F);
     }
 
     private void stand()
@@ -148,31 +148,95 @@ public class NanoDecoyBall extends Projectile
                     level().addParticle(ParticleTypes.ELECTRIC_SPARK, getX(), getY() + 0.1D, getZ(), Math.cos(a) * 0.25D, 0.08D, Math.sin(a) * 0.25D);
                 }
             }
-            //Going, it fizzles out in cyan sparks.
-            if(time > OPEN_TICKS + STAND_TICKS)
+            //Its time up, the hexagons fall apart into particles, in their own shape, drifting up and fading.
+            if(!dissolved && time >= OPEN_TICKS + STAND_TICKS)
             {
-                for(int i = 0; i < 2; i++)
+                dissolved = true;
+                if(time < OPEN_TICKS + STAND_TICKS + 3L)
                 {
-                    level().addParticle(SPARK, getX() + (random.nextDouble() - 0.5D) * 0.5D, getY() + random.nextDouble() * 0.5D,
-                            getZ() + (random.nextDouble() - 0.5D) * 0.5D, 0D, 0.03D, 0D);
+                    dissolve();
                 }
             }
             return;
         }
         if(time == OPEN_TICKS && level() instanceof ServerLevel server)
         {
-            //The lens is up: it projects the copy of its thrower, walking off the way it was thrown.
+            //Open: it projects the copy of its thrower over its ring, facing the way it was thrown.
             Player owner = getOwner() instanceof Player player ? player : null;
             server.addFreshEntity(NanoDecoyFigure.of(server, owner, getX(), getY(), getZ(), heading()));
-        }
-        if(time == OPEN_TICKS + STAND_TICKS)
-        {
-            level().playSound(null, getX(), getY(), getZ(), GlassSounds.NANO_DISSOLVE, SoundSource.PLAYERS, 0.8F, 1.2F);
         }
         if(time >= OPEN_TICKS + STAND_TICKS + CLOSE_TICKS)
         {
             discard();
         }
+    }
+
+    /** The hexagons as particles: the plate's metal over its whole face, cyan along its edge and round the ring. */
+    private void dissolve()
+    {
+        double turn = Math.toRadians(-heading());
+        //The plate: metal dust over the hexagon, a little cyan in it.
+        for(int i = 0; i < 70; i++)
+        {
+            double[] p = inHexagon(BASE_APOTHEM);
+            emit(i % 4 == 0 ? RIM_DUST : PLATE_DUST, p[0], 0.06D, p[1], turn, 0.02D + random.nextDouble() * 0.03D);
+        }
+        //Its glowing edge, and the floating ring.
+        for(int side = 0; side < 6; side++)
+        {
+            for(int j = 0; j < 7; j++)
+            {
+                double[] p = onSide(BASE_APOTHEM, side, j / 6D);
+                emit(RIM_DUST, p[0], 0.1D, p[1], turn, 0.03D + random.nextDouble() * 0.03D);
+                if(j % 2 == 0)
+                {
+                    double[] q = onSide(RING_APOTHEM, side, j / 6D);
+                    emit(RIM_DUST, q[0], RING_HEIGHT, q[1], turn, 0.04D + random.nextDouble() * 0.04D);
+                }
+            }
+        }
+        for(int i = 0; i < 10; i++)
+        {
+            double[] p = inHexagon(BASE_APOTHEM);
+            emit(ParticleTypes.ELECTRIC_SPARK, p[0], 0.2D, p[1], turn, 0.06D);
+        }
+    }
+
+    private void emit(net.minecraft.core.particles.ParticleOptions particle, double x, double y, double z, double turn, double up)
+    {
+        double c = Math.cos(turn), s = Math.sin(turn);
+        double wx = x * c + z * s, wz = -x * s + z * c;
+        level().addParticle(particle, getX() + wx, getY() + y, getZ() + wz,
+                wx * 0.04D + (random.nextDouble() - 0.5D) * 0.01D, up, wz * 0.04D + (random.nextDouble() - 0.5D) * 0.01D);
+    }
+
+    /** A random point inside a hexagon with this apothem, flat sides facing north and south (x, z). */
+    private double[] inHexagon(double apothem)
+    {
+        double reach = apothem * 2D / Math.sqrt(3D);
+        while(true)
+        {
+            double x = (random.nextDouble() * 2D - 1D) * reach, z = (random.nextDouble() * 2D - 1D) * reach;
+            boolean inside = true;
+            for(int k = 0; k < 3; k++)
+            {
+                double a = Math.toRadians(90D + 60D * k);
+                inside &= Math.abs(x * Math.cos(a) + z * Math.sin(a)) <= apothem;
+            }
+            if(inside)
+            {
+                return new double[] { x, z };
+            }
+        }
+    }
+
+    /** A point along one side (0 to 5) of a hexagon with this apothem, at t (0 to 1) from one corner to the next. */
+    private static double[] onSide(double apothem, int side, double t)
+    {
+        double a = Math.toRadians(90D + 60D * side);
+        double half = apothem / Math.sqrt(3D);
+        double along = (t * 2D - 1D) * half;
+        return new double[] { Math.cos(a) * apothem - Math.sin(a) * along, Math.sin(a) * apothem + Math.cos(a) * along };
     }
 
     @Override

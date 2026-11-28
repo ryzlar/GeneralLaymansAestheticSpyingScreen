@@ -6,6 +6,7 @@ glowing band round its middle and a glowing lens on top. It is two halves, "top"
 lands.
 
     python tools/make_nano_decoy.py texture          writes textures/item/nano_decoy.png (+ .mcmeta: it is animated)
+    python tools/make_nano_decoy.py icon             writes textures/item/nano_decoy_icon.png, the flat item in the inventory
     python tools/make_nano_decoy.py split MODEL.json  splits Blockbench's Java export into the item model and its parts
         (add --parts-only for blockbench/nano_decoy_hex.bbmodel: the hexagons' pieces, no item model)
 """
@@ -74,6 +75,47 @@ def texture():
     print("wrote", TEXTURE)
 
 
+ICON = ASSETS / "textures/item/nano_decoy_icon.png"
+
+
+def icon():
+    """The item as a 16x16 sprite: the ball lit from the top left, dark outline, glowing band, lens and lights."""
+    from PIL import Image
+    img = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
+    px = img.load()
+    cx, cy, r = 7.5, 7.5, 6.6
+    lx, ly, lz = -0.55, -0.6, 0.58  # the light: from the top left, a little in front
+    inside = lambda x, y: math.hypot(x + 0.5 - cx, y + 0.5 - cy) <= r
+    for y in range(16):
+        for x in range(16):
+            if not inside(x, y):
+                continue
+            dx, dy = (x + 0.5 - cx) / r, (y + 0.5 - cy) / r
+            dz = math.sqrt(max(0.0, 1.0 - dx * dx - dy * dy))
+            lit = max(0.0, dx * lx + dy * ly + dz * lz)
+            v = 26 + 140 * lit ** 1.3
+            col = (int(v * 0.88), int(v * 0.95), int(min(255, v * 1.12 + 8)), 255)
+            edge = not all(inside(x + ox, y + oy) for ox, oy in ((1, 0), (-1, 0), (0, 1), (0, -1)))
+            if edge:
+                col = (18, 20, 28, 255)
+            px[x, y] = col
+    # The glowing band round its middle, white-hot towards the light.
+    for x in range(16):
+        for y, bright in ((8, 1.0), (9, 0.55)):
+            if inside(x, y) and inside(x - 1, y) and inside(x + 1, y):
+                hot = max(0.0, 1.0 - abs(x - 5.5) / 6.0) * bright
+                px[x, y] = (int(40 + 150 * hot), int(200 + 55 * hot), 255, 255)
+    # The lens on top, and the lights on its upper half.
+    for x, y, c in ((7, 2, (90, 235, 255)), (8, 2, (90, 235, 255)), (7, 1, (210, 255, 255)), (8, 1, (150, 245, 255)),
+                    (3, 5, (80, 225, 255)), (12, 5, (60, 200, 245))):
+        px[x, y] = c + (255,)
+    # A small highlight where the light catches it.
+    for x, y in ((4, 4), (5, 3)):
+        px[x, y] = (226, 234, 246, 255)
+    img.save(ICON)
+    print("wrote", ICON)
+
+
 def split(exported, parts_only=False):
     """Blockbench's Java model: the item model as it is (unless parts_only), plus one model per group
     (nano_decoy_<group>)."""
@@ -81,7 +123,7 @@ def split(exported, parts_only=False):
     model["textures"] = {"0": TEX_ID, "particle": TEX_ID}
     elements = model["elements"]
     groups = {g["name"]: set(g["children"]) for g in model.get("groups", []) if isinstance(g, dict)}
-    out = {} if parts_only else {"nano_decoy": model}
+    out = {} if parts_only else {"nano_decoy_ball": model}  # the 3D ball, drawn flying (the item itself is a flat icon)
     for name, children in groups.items():
         out["nano_decoy_" + name] = {"textures": model["textures"], "elements": [e for i, e in enumerate(elements) if i in children]}
     for name, data in out.items():
@@ -97,5 +139,7 @@ def split(exported, parts_only=False):
 if __name__ == "__main__":
     if sys.argv[1] == "texture":
         texture()
+    elif sys.argv[1] == "icon":
+        icon()
     elif sys.argv[1] == "split":
         split(sys.argv[2], "--parts-only" in sys.argv)
