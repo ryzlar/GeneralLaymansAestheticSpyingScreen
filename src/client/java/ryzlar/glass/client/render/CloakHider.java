@@ -315,9 +315,10 @@ public final class CloakHider
             }
             Cloak cloak = CLOAKS.get(key);
             boolean wasInside = cloak != null && cloak.parts.isEmpty();
-            if(isInside(eye, boxes, wasInside))
+            if(isInside(eye, boxes, wasInside) || belowField(eye, master.cloakFieldBox(), wasInside))
             {
-                //Inside it the base is there as always.
+                //Inside it the base is there as always. So it is under a field: a field has no floor, and from below the
+                //hidden blocks showed the sky straight through the base.
                 if(cloak != null && !cloak.parts.isEmpty())
                 {
                     release(mc, cloak);
@@ -490,6 +491,12 @@ public final class CloakHider
             }
         }
         return sides;
+    }
+
+    /** Whether the eye is below a field's bottom (its walls and roof hide nothing from there). */
+    private static boolean belowField(Vec3 eye, @Nullable AABB field, boolean wasInside)
+    {
+        return field != null && eye.y < field.minY + (wasInside ? INSIDE_MARGIN : -INSIDE_MARGIN);
     }
 
     private static boolean isInside(Vec3 eye, List<AABB> boxes, boolean wasInside)

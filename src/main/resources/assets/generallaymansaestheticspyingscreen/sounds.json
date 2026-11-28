@@ -94,5 +94,12 @@
     "sounds": [
       "generallaymansaestheticspyingscreen:alert"
     ]
+  },
+  "field_pass": {
+    "category": "block",
+    "subtitle": "subtitles.generallaymansaestheticspyingscreen.field_pass",
+    "sounds": [
+      "generallaymansaestheticspyingscreen:field_pass"
+    ]
   }
 }

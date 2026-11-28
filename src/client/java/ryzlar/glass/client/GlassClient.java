@@ -45,10 +45,20 @@ public class GlassClient implements ClientModInitializer
             {
                 lines.add(net.minecraft.network.chat.Component.translatable("glass.tooltip.amplifier").withStyle(net.minecraft.ChatFormatting.GRAY));
             }
+            if(ryzlar.glass.decoy.NanoDecoyFeature.ENABLED && stack.is(ryzlar.glass.decoy.NanoDecoy.NANO_DECOY))
+            {
+                lines.add(net.minecraft.network.chat.Component.translatable("glass.tooltip.nano_decoy").withStyle(net.minecraft.ChatFormatting.AQUA));
+                lines.add(net.minecraft.network.chat.Component.translatable("glass.tooltip.nano_decoy.use").withStyle(net.minecraft.ChatFormatting.GRAY));
+            }
         });
         if(ryzlar.glass.gadget.GadgetFeature.ENABLED)
         {
             ryzlar.glass.client.gadget.GadgetsClient.init();
+        }
+        if(ryzlar.glass.decoy.NanoDecoyFeature.ENABLED)
+        {
+            net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry.register(ryzlar.glass.decoy.NanoDecoy.BALL, ryzlar.glass.client.decoy.NanoDecoyRenderer::new);
+            net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry.register(ryzlar.glass.decoy.NanoDecoy.FIGURE, ryzlar.glass.client.decoy.NanoDecoyFigureRenderer::new);
         }
         //No selection outline on blocks a cloak hides (or on the cloak's own glass), seen from outside.
         WorldRenderEvents.BEFORE_BLOCK_OUTLINE.register((context, hit) -> !(hit instanceof BlockHitResult block

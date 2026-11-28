@@ -294,6 +294,25 @@ def ripple():
     finish(reverb(buf, 1.0, 0.35, 5000), 'ripple', peak=0.75)
 
 
+def field_pass():
+    """Going through a cloak: a steady fizz of tiny nano grains, all in one bright band (no pitch moving, nothing
+    singing), swelling in and out evenly, a soft hush of the same colour under it, and only a short dry room. It plays
+    every time you go through, so it stays the same and does not ring on."""
+    d = 0.6
+    n = int(d * SR)
+    buf = silence(d + 0.05)
+    g_rng = np.random.default_rng(3)
+    env = np.sin(np.pi * np.linspace(0, 1, n)) ** 1.3
+    for _ in range(360):
+        pos = g_rng.random()
+        f = g_rng.uniform(3800, 6200)
+        g = svf(g_rng.standard_normal(int(g_rng.uniform(0.004, 0.012) * SR)), f, 3.0, 'bp')
+        g *= np.hanning(len(g))
+        place(buf, g * np.sin(np.pi * pos) ** 1.3 * g_rng.uniform(0.4, 1.0) * 0.5, pos * d)
+    place(buf, svf(noise(d), 5000, 0.7, 'bp') * env * 0.12, 0)
+    finish(reverb(buf, 0.25, 0.08, 6000), 'field_pass', peak=0.8, tail=0.01)
+
+
 def alert():
     """Motion alert: two-tone pulses, a little buzzy, with a glassy tail."""
     buf = silence(1.3)
@@ -309,6 +328,6 @@ def alert():
 ONLY = sys.argv[2:] if len(sys.argv) > 2 else None
 
 os.makedirs(OUT, exist_ok=True)
-for f in (nano_assemble, nano_dissolve, cloak_engage, field_rise, scan_start, scan_sweep, scan_complete, sim_open, sim_close, ui_click, ui_open, ripple, alert):
+for f in (nano_assemble, nano_dissolve, cloak_engage, field_rise, scan_start, scan_sweep, scan_complete, sim_open, sim_close, ui_click, ui_open, ripple, alert, field_pass):
     if ONLY is None or f.__name__ in ONLY:
         f()

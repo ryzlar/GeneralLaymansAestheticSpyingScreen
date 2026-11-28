@@ -32,6 +32,14 @@ holograms, and walk into a scanned memory of a spot. Everything is explained in 
 - **Cloak Amplifiers** next to the projector let a cloak grow bigger (up to 64x64 and 32 high).
 - Cloaks stay hidden at any distance up to your render distance, and cost less the further away they are.
 
+### Nano Decoy
+- Throw it and it lands and opens into a hexagon base, which projects a **nano copy of you**, your skin built out of
+  small cubes, with your name above it.
+- For 13 seconds it draws in the hostile mobs (and the ones angry at you, the Warden included) within 16 blocks. They
+  swing straight through it; creepers do not explode at it. Hit, it glitches and drops a few cubes, and at the end it
+  falls apart into nano pixels.
+- Stacks to 4, used up when thrown, 20 seconds' cooldown.
+
 ### Hologram kit
 - The **Holo Scanner** captures an area of up to 32x32x32 blocks into a **Projection Crystal** (one amethyst shard a scan).
 - The **Holo Projector** projects it as a hologram (classic, blue or solid look, any scale, any rotation);
@@ -66,6 +74,7 @@ All GLASS items are in their own creative tab.
 | Holo Projector | glass, amethyst shards, diamond, iron ingots |
 | Holo Emitter (x4) | amethyst shard, end rod, iron nugget |
 | Holo Cube | iron ingots, amethyst shards, glass, observer |
+| Nano Decoy | diamond, amethyst shard, tinted glass, ender pearl, GLASS Extension (any shape) |
 
 The exact grids are in the GLASS Tome (and in any recipe viewer).
 
@@ -79,6 +88,8 @@ The exact grids are in the GLASS Tome (and in any recipe viewer).
   told when you join).
 - **Distant Horizons** works: its far terrain stays out of cloaks, and the camera image keeps its clouds.
 - **Xaero's Minimap** and **Xaero's World Map** work: a cloaked build does not show on the map from outside the cloak.
+- **JourneyMap** works the same way: a cloaked build does not show on its minimap or fullscreen map from outside.
+- **Entity Culling** works: mobs behind a wall still show on camera screens and through cloaks.
 
 ### Server settings
 
@@ -114,7 +125,8 @@ GLASS is licensed under the **GNU Lesser General Public License v3.0**, and so i
 Built with [Fabric API](https://github.com/FabricMC/fabric) (Apache 2.0), which is not included in the jar.
 [Sodium](https://github.com/CaffeineMC/sodium), [Iris](https://github.com/IrisShaders/Iris),
 [Distant Horizons](https://modrinth.com/mod/distanthorizons), [Xaero's Minimap](https://modrinth.com/mod/xaeros-minimap)
-and [Xaero's World Map](https://modrinth.com/mod/xaeros-world-map) are supported but not included.
+[Xaero's World Map](https://modrinth.com/mod/xaeros-world-map), [JourneyMap](https://modrinth.com/mod/journeymap) and
+[Entity Culling](https://modrinth.com/mod/entityculling) are supported but not included.
 
 ## Changes from the original
 
@@ -147,8 +159,8 @@ Tests:
   `GLASS_TEST_ONLY=stress` runs the stress test (many cloaks, a dedicated server joined twice, a scan bigger than one
   packet).
 - `./gradlew prodServer` / `./gradlew prodClient`: the built jar as players get it, on a real server or client.
-- Add `-PwithSodium`, `-PwithIris`, `-PwithDH` or `-PwithXaero` to a client run to try it with Sodium, Iris,
-  Distant Horizons or Xaero's Minimap and World Map.
+- Add `-PwithSodium`, `-PwithIris`, `-PwithDH`, `-PwithXaero`, `-PwithJM` or `-PwithEntityCulling` to a client run
+  to try it with Sodium, Iris, Distant Horizons, Xaero's Minimap and World Map, JourneyMap or Entity Culling.
 
 The GLASS Tome's pages are written by `tools/tome_pages.py`, the icon and the tome's texture by
 `tools/make_icon.py` and `tools/make_tome_texture.py`.

@@ -177,6 +177,16 @@ public class HoloCubeRenderer extends EntityRenderer<HoloCubeEntity, HoloCubeRen
         itemModels.updateForNonLiving(state.core, CORE, net.minecraft.world.item.ItemDisplayContext.NONE, entity);
     }
 
+    /**
+     * The bubble is big and the cube small: never culled by its own box (Entity Culling asks this too, and skipped the
+     * whole bubble when the cube itself was behind a block).
+     */
+    @Override
+    protected boolean affectedByCulling(HoloCubeEntity entity)
+    {
+        return false;
+    }
+
     /** The bubble is big and the cube small: keep drawing while the bubble may be on screen. */
     @Override
     public boolean shouldRender(HoloCubeEntity entity, Frustum frustum, double x, double y, double z)

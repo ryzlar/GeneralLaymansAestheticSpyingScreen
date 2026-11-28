@@ -97,24 +97,33 @@ public final class CloakFill
      * columns to either side of it, and {@code ring} rows of ground behind that are drawn again.
      */
     public record Area(Direction side, int groundY, int minAcross, int maxAcross, int outerBlock, int depth, AABB hidden, BlockPos lightPos,
-                       int before, int after, int spread, int ring)
+                       int before, int after, int spread, int ring, boolean realGround)
     {
         /** A screen's side: the world beside the hidden part is drawn back in, and the ground just behind it. */
         public static Area side(Direction side, int groundY, int minAcross, int maxAcross, int outerBlock, int depth, AABB hidden, BlockPos lightPos)
         {
-            return new Area(side, groundY, minAcross, maxAcross, outerBlock, depth, hidden, lightPos, 0, 0, SPREAD, RING);
+            return new Area(side, groundY, minAcross, maxAcross, outerBlock, depth, hidden, lightPos, 0, 0, SPREAD, RING, false);
         }
 
         /** The same, with {@code rows} rows in front of the glass drawn back in too (right in front of the hidden part). */
         public Area inFront(int rows)
         {
-            return new Area(side, groundY, minAcross, maxAcross, outerBlock, depth, hidden, lightPos, rows, after, spread, ring);
+            return new Area(side, groundY, minAcross, maxAcross, outerBlock, depth, hidden, lightPos, rows, after, spread, ring, realGround);
+        }
+
+        /**
+         * The same, keeping the real ground under the hidden part instead of making it up: for an end of a screen, which
+         * hides only the glass (the ground under it is not hidden, only cut away with it by the clip plane).
+         */
+        public Area withRealGround()
+        {
+            return new Area(side, groundY, minAcross, maxAcross, outerBlock, depth, hidden, lightPos, before, after, spread, ring, true);
         }
 
         /** Seen from above: the world all around the hidden part is drawn back in. */
         public Area allAround(int margin)
         {
-            return new Area(side, groundY, minAcross, maxAcross, outerBlock, depth, hidden, lightPos, margin, margin, margin, 0);
+            return new Area(side, groundY, minAcross, maxAcross, outerBlock, depth, hidden, lightPos, margin, margin, margin, 0, realGround);
         }
 
         BlockPos column(int along, int across, int y)
@@ -379,6 +388,21 @@ public final class CloakFill
 
         //Made-up ground for the hidden columns.
         Long2ObjectOpenHashMap<Column> made = new Long2ObjectOpenHashMap<>();
+        if(area.realGround())
+        {
+            //The real ground under it, where there is any (the made-up ground below fills in where there is none).
+            for(int along = 0; along < area.depth(); along++)
+            {
+                for(int across = area.minAcross(); across <= area.maxAcross(); across++)
+                {
+                    Column real = realColumn(area, level, area.column(along, across, 0), realColumns);
+                    if(real != null)
+                    {
+                        made.put(columnKey(area.column(along, across, real.height())), real);
+                    }
+                }
+            }
+        }
         if(!ground.isEmpty())
         {
             for(int along = 0; along < area.depth(); along++)
@@ -404,6 +428,10 @@ public final class CloakFill
                     }
                     int height = Math.clamp(Math.round(heights / weights), reference - MAX_RISE, reference + MAX_RISE);
                     BlockPos pos = area.column(along, across, height);
+                    if(made.containsKey(columnKey(pos)))
+                    {
+                        continue; //real ground there (see above)
+                    }
                     BlockState plant = null;
                     if(hash(pos, 17) < plantChance)
                     {

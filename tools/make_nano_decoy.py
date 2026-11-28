@@ -1,0 +1,145 @@
+"""Nano Decoy: its animated texture, and the game's models split out of Blockbench's export.
+
+The ball itself is modelled in Blockbench (blockbench/nano_decoy.bbmodel, built through Blockbench's MCP server): a round
+ball of stacked sixteen-sided discs (each four flat cubes turned 22.5 degrees apart), gunmetal lit from above, a
+glowing band round its middle and a glowing lens on top. It is two halves, "top" and "bottom", which part when it
+lands.
+
+    python tools/make_nano_decoy.py texture          writes textures/item/nano_decoy.png (+ .mcmeta: it is animated)
+    python tools/make_nano_decoy.py icon             writes textures/item/nano_decoy_icon.png, the flat item in the inventory
+    python tools/make_nano_decoy.py split MODEL.json  splits Blockbench's Java export into the item model and its parts
+        (add --parts-only for blockbench/nano_decoy_hex.bbmodel: the hexagons' pieces, no item model)
+"""
+import json
+import math
+import random
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+ASSETS = ROOT / "src/main/resources/assets/generallaymansaestheticspyingscreen"
+TEXTURE = ASSETS / "textures/item/nano_decoy.png"
+TEX_ID = "generallaymansaestheticspyingscreen:item/nano_decoy"
+
+# Texture regions (16x16 a frame). SHADE is mapped by height on the ball's sides, so the ball is lit from above.
+SHADE = (0, 0, 8, 8)
+GLOW = (8, 0, 16, 8)
+TOP = (0, 8, 8, 16)
+DARK = (8, 8, 16, 16)
+FRAMES = 16
+
+
+def lerp(a, b, t):
+    return a + (b - a) * t
+
+
+def texture():
+    """16 frames: the metal stays, the glow pulses with a band of light running across it."""
+    from PIL import Image
+    img = Image.new("RGBA", (16, 16 * FRAMES), (0, 0, 0, 0))
+    px = img.load()
+    for f in range(FRAMES):
+        rnd = random.Random(11)
+        top = 16 * f
+        phase = f / FRAMES
+        pulse = 0.8 + 0.2 * math.sin(phase * 2 * math.pi)
+        band = phase * 12 - 2
+        for y in range(8):
+            for x in range(8):
+                # Sides: gunmetal lit from above (light at the top of the ball, dark at its foot), a thin seam line
+                # two rows down, and a faint highlight streak.
+                t = y / 7.0
+                v = lerp(138, 30, t ** 0.8) + rnd.randint(-3, 3)
+                if y == 2:
+                    v -= 22
+                if x in (2, 3) and y < 5:
+                    v += 14
+                px[x, top + y] = (int(v * 0.9), int(v * 0.96), int(min(v * 1.1 + 6, 255)), 255)
+                # Top faces: a round bright highlight in the middle, darker to the edges.
+                d = math.hypot(x - 2.6, y - 2.6) / 6.0
+                w = lerp(196, 92, min(d, 1.0)) + rnd.randint(-2, 2)
+                px[x, top + 8 + y] = (int(w * 0.9), int(w * 0.97), int(min(w * 1.08 + 6, 255)), 255)
+                # Undersides: dark.
+                k = 26 + rnd.randint(-2, 2)
+                px[8 + x, top + 8 + y] = (k - 3, k, k + 6, 255)
+                # Glow: cyan, white-hot in the middle row, pulsing, with a bright band running across.
+                mid = 1.0 - abs(y - 3.5) / 4.0
+                lift = max(0.0, 1.0 - abs(x - band) / 1.5)
+                r = (60 + 120 * mid) * pulse + 90 * lift
+                g = (190 + 60 * mid) * pulse + 30 * lift
+                px[8 + x, top + y] = (int(min(r, 255)), int(min(g, 255)), 255, 255)
+    TEXTURE.parent.mkdir(parents=True, exist_ok=True)
+    img.save(TEXTURE)
+    TEXTURE.with_suffix(".png.mcmeta").write_text(json.dumps({"animation": {"frametime": 2, "interpolate": True}}, indent=2) + "\n",
+                                                  encoding="utf-8")
+    print("wrote", TEXTURE)
+
+
+ICON = ASSETS / "textures/item/nano_decoy_icon.png"
+
+
+def icon():
+    """The item as a 16x16 sprite: the ball lit from the top left, dark outline, glowing band, lens and lights."""
+    from PIL import Image
+    img = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
+    px = img.load()
+    cx, cy, r = 7.5, 7.5, 6.6
+    lx, ly, lz = -0.55, -0.6, 0.58  # the light: from the top left, a little in front
+    inside = lambda x, y: math.hypot(x + 0.5 - cx, y + 0.5 - cy) <= r
+    for y in range(16):
+        for x in range(16):
+            if not inside(x, y):
+                continue
+            dx, dy = (x + 0.5 - cx) / r, (y + 0.5 - cy) / r
+            dz = math.sqrt(max(0.0, 1.0 - dx * dx - dy * dy))
+            lit = max(0.0, dx * lx + dy * ly + dz * lz)
+            v = 26 + 140 * lit ** 1.3
+            col = (int(v * 0.88), int(v * 0.95), int(min(255, v * 1.12 + 8)), 255)
+            edge = not all(inside(x + ox, y + oy) for ox, oy in ((1, 0), (-1, 0), (0, 1), (0, -1)))
+            if edge:
+                col = (18, 20, 28, 255)
+            px[x, y] = col
+    # The glowing band round its middle, white-hot towards the light.
+    for x in range(16):
+        for y, bright in ((8, 1.0), (9, 0.55)):
+            if inside(x, y) and inside(x - 1, y) and inside(x + 1, y):
+                hot = max(0.0, 1.0 - abs(x - 5.5) / 6.0) * bright
+                px[x, y] = (int(40 + 150 * hot), int(200 + 55 * hot), 255, 255)
+    # The lens on top, and the lights on its upper half.
+    for x, y, c in ((7, 2, (90, 235, 255)), (8, 2, (90, 235, 255)), (7, 1, (210, 255, 255)), (8, 1, (150, 245, 255)),
+                    (3, 5, (80, 225, 255)), (12, 5, (60, 200, 245))):
+        px[x, y] = c + (255,)
+    # A small highlight where the light catches it.
+    for x, y in ((4, 4), (5, 3)):
+        px[x, y] = (226, 234, 246, 255)
+    img.save(ICON)
+    print("wrote", ICON)
+
+
+def split(exported, parts_only=False):
+    """Blockbench's Java model: the item model as it is (unless parts_only), plus one model per group
+    (nano_decoy_<group>)."""
+    model = json.loads(Path(exported).read_text(encoding="utf-8"))
+    model["textures"] = {"0": TEX_ID, "particle": TEX_ID}
+    elements = model["elements"]
+    groups = {g["name"]: set(g["children"]) for g in model.get("groups", []) if isinstance(g, dict)}
+    out = {} if parts_only else {"nano_decoy_ball": model}  # the 3D ball, drawn flying (the item itself is a flat icon)
+    for name, children in groups.items():
+        out["nano_decoy_" + name] = {"textures": model["textures"], "elements": [e for i, e in enumerate(elements) if i in children]}
+    for name, data in out.items():
+        data = dict(data)
+        for key in ("groups", "credit", "format_version"):
+            data.pop(key, None)
+        (ASSETS / "models/item" / (name + ".json")).write_text(json.dumps(data, indent=1), encoding="utf-8")
+        item = {"model": {"type": "minecraft:model", "model": "generallaymansaestheticspyingscreen:item/" + name}}
+        (ASSETS / "items" / (name + ".json")).write_text(json.dumps(item, indent=2) + "\n", encoding="utf-8")
+        print("wrote", name, len(data["elements"]), "elements")
+
+
+if __name__ == "__main__":
+    if sys.argv[1] == "texture":
+        texture()
+    elif sys.argv[1] == "icon":
+        icon()
+    elif sys.argv[1] == "split":
+        split(sys.argv[2], "--parts-only" in sys.argv)

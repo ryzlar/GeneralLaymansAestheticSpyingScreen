@@ -23,6 +23,8 @@ public final class GlassSounds
     public static final SoundEvent UI_OPEN = register("ui_open");
     public static final SoundEvent RIPPLE = register("ripple");
     public static final SoundEvent ALERT = register("alert");
+    /** Going through a cloak or a cloak field: a steady nano fizz. */
+    public static final SoundEvent FIELD_PASS = register("field_pass");
 
     private GlassSounds() {}
 

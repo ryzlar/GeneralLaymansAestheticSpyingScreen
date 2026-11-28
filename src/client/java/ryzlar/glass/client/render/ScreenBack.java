@@ -96,14 +96,15 @@ public final class ScreenBack
             {
                 boolean in = box.contains(body);
                 Vec3 onWall = nearestOnBoxSurface(box, body);
-                if(last != null && in != box.contains(last))
+                if(last != null && in != box.contains(last) && !throughFloor(box, in ? last : body))
                 {
-                    //Through it: a ripple on both sides of the wall, and the shockwave.
+                    //Through it: a ripple on both sides of the wall, and the shockwave. Not through its bottom: there is
+                    //no floor there, so nothing to ripple or hear.
                     ripple(key, onWall, now, true);
                     GlassClientState.INSTANCE.addPunch(key, onWall);
                     shock(key, onWall, now, in);
                 }
-                else if(onWall.distanceTo(body) < TOUCH)
+                else if(onWall.distanceTo(body) < TOUCH && !throughFloor(box, body))
                 {
                     //Brushing against it: from inside its back ripples, from outside its image.
                     if(in)
@@ -127,7 +128,7 @@ public final class ScreenBack
                     Vec3 otherBody = other.position().add(0D, other.getBbHeight() * 0.55D, 0D);
                     Vec3 otherLast = OTHER_BODIES.put(bodyKey, otherBody);
                     boolean otherIn = box.contains(otherBody);
-                    if(otherLast != null && otherIn != box.contains(otherLast))
+                    if(otherLast != null && otherIn != box.contains(otherLast) && !throughFloor(box, otherIn ? otherLast : otherBody))
                     {
                         Vec3 at = nearestOnBoxSurface(box, otherBody);
                         ripple(key, at, now, true);
@@ -180,7 +181,7 @@ public final class ScreenBack
         SHOCKS.keySet().retainAll(active);
     }
 
-    /** A ripple on the outside of a cloak field (its image), at most every {@link #TOUCH_REPEAT} ticks. */
+    /** A ripple on the outside of a cloak field (its image), at most every {@link #TOUCH_REPEAT} ticks; silent. */
     private static void touchFront(String key, Vec3 point, long now)
     {
         GlassClientState.Punch last = GlassClientState.INSTANCE.punchFor(key);
@@ -188,13 +189,8 @@ public final class ScreenBack
         {
             return;
         }
+        //Seen, not heard: going through has its own sound (see ripple), touching makes none.
         GlassClientState.INSTANCE.addPunch(key, point);
-        Minecraft mc = Minecraft.getInstance();
-        if(mc.level != null)
-        {
-            mc.level.playLocalSound(point.x, point.y, point.z, ryzlar.glass.GlassSounds.RIPPLE, net.minecraft.sounds.SoundSource.BLOCKS,
-                    0.35F, 0.9F + mc.level.random.nextFloat() * 0.2F, false);
-        }
     }
 
     private static void shock(String key, Vec3 point, long now, boolean entering)
@@ -224,7 +220,7 @@ public final class ScreenBack
             return;
         }
         Vec3 eye = mc.gameRenderer.getMainCamera().getPosition();
-        boolean inside = box.contains(eye);
+        boolean inside = box.contains(eye) || GlassBlockEntityRenderer.underField(box, eye);
         float x = age / SHOCK_TICKS;
         int radius = Mth.clamp(Math.round(age * SHOCK_SPEED * 64F), 0, 32767);
         int life = Mth.clamp(Math.round(x * x * 1000F), 0, 1000);
@@ -239,9 +235,10 @@ public final class ScreenBack
                 case WEST -> eye.x < box.minX;
                 case EAST -> eye.x > box.maxX;
                 case UP -> eye.y > box.maxY;
-                case DOWN -> eye.y < box.minY;
+                case DOWN -> false;
             };
-            if(inside || seen)
+            //No underside: a field has walls and a roof, not a floor.
+            if(face != Direction.DOWN && (inside || seen))
             {
                 shockFace(consumer, pose, box, face, shock.point(), centre, inside, radius, life);
             }
@@ -285,9 +282,20 @@ public final class ScreenBack
         Minecraft mc = Minecraft.getInstance();
         if(mc.level != null)
         {
-            mc.level.playLocalSound(point.x, point.y, point.z, ryzlar.glass.GlassSounds.RIPPLE, net.minecraft.sounds.SoundSource.BLOCKS,
-                    through ? 0.7F : 0.35F, 0.9F + mc.level.random.nextFloat() * 0.2F, false);
+            //Going through: the steady nano fizz, the same every time. Brushing against it ripples without a sound
+            //(it did make one, which played on top of this one just before and after going through).
+            if(through)
+            {
+                mc.level.playLocalSound(point.x, point.y, point.z, ryzlar.glass.GlassSounds.FIELD_PASS, net.minecraft.sounds.SoundSource.BLOCKS,
+                        0.7F, 1F, false);
+            }
         }
+    }
+
+    /** Whether a point outside a field is under it, so going in or out from there is through its (missing) floor. */
+    private static boolean throughFloor(AABB box, Vec3 outside)
+    {
+        return outside.y < box.minY && outside.x > box.minX && outside.x < box.maxX && outside.z > box.minZ && outside.z < box.maxZ;
     }
 
     private static Vec3 nearestOnBoxSurface(AABB box, Vec3 p)

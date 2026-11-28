@@ -157,10 +157,18 @@ public final class TomeBook
                 JsonObject page = read(Glass.id("tome/pages/" + id + ".json"));
                 if(page != null)
                 {
-                    pages.add(parsePage(id, chapterTitle, page));
+                    Page parsed = parsePage(id, chapterTitle, page);
+                    //About items this game does not have (a feature switched off): left out.
+                    if(parsed.items().isEmpty() || parsed.items().stream().anyMatch(net.minecraft.core.registries.BuiltInRegistries.ITEM::containsKey))
+                    {
+                        pages.add(parsed);
+                    }
                 }
             }
-            chapters.add(new Chapter(chapterTitle, List.copyOf(pages)));
+            if(!pages.isEmpty())
+            {
+                chapters.add(new Chapter(chapterTitle, List.copyOf(pages)));
+            }
         }
         return new TomeBook(List.copyOf(chapters));
     }

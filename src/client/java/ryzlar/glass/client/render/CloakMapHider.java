@@ -18,7 +18,7 @@ import ryzlar.glass.client.GlassClientState;
 import ryzlar.glass.client.TerminalPlacement;
 
 /**
- * What map mods (Xaero's Minimap and World Map) are to see where a cloak hides something: the same made-up ground the world drawing
+ * What map mods (Xaero's Minimap and World Map, JourneyMap) are to see where a cloak hides something: the same made-up ground the world drawing
  * gets ({@link CloakFill#hide}), for every cloak that is on, glass cloaks drawn with views included (those hide nothing
  * from the world drawing, see {@link CloakHider}). A map reads the blocks themselves, so without this a cloaked build
  * showed on it. Seen from inside the cloak, the base shows on the map as it does in the world.
@@ -31,7 +31,8 @@ public final class CloakMapHider
 {
     /** Only kept with a map mod that reads it installed (it costs a made-up ground per glass cloak otherwise unneeded). */
     private static final boolean NEEDED = net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("xaerominimap")
-            || net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("xaeroworldmap");
+            || net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("xaeroworldmap")
+            || net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("journeymap");
     private static final BlockState NANO = GlassRegistry.NANO_VEIL.defaultBlockState();
     /** How long the wave takes to cross the hidden part, and how wide its nano front is, in ticks. */
     private static final float SPREAD_TICKS = 30F, FRONT_TICKS = 6F;
@@ -94,6 +95,26 @@ public final class CloakMapHider
             }
         }
         return null;
+    }
+
+    /** True if a cloak hides something in this column (the map's top block there may be another one). */
+    public static boolean covers(int x, int z)
+    {
+        for(Shown part : active)
+        {
+            CloakHider.Hidden h = part.hidden;
+            if(x >= h.minX() && x < h.minX() + h.sizeX() && z >= h.minZ() && z < h.minZ() + h.sizeZ())
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** True on one of JourneyMap's mapping threads (it reads the world there, see JourneyMapChunkMixin). */
+    public static boolean journeyMapThread()
+    {
+        return Thread.currentThread().getName().startsWith("JM-");
     }
 
     public static boolean hidesAnything()
@@ -277,7 +298,16 @@ public final class CloakMapHider
                 //A map version without it: it is left alone.
             }
         }
+        if(JOURNEYMAP)
+        {
+            //JourneyMap redraws a chunk when the server sends a block in it: the chunk's bottom block is "sent" again as
+            //it is. Minecraft changes nothing for a block that stays the same; only JourneyMap takes note.
+            BlockPos pos = new BlockPos(chunk.getPos().getMinBlockX(), level.getMinY(), chunk.getPos().getMinBlockZ());
+            level.setServerVerifiedBlockState(pos, level.getBlockState(pos), net.minecraft.world.level.block.Block.UPDATE_ALL_IMMEDIATE);
+        }
     }
+
+    private static final boolean JOURNEYMAP = net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("journeymap");
 
     /** Xaero's Minimap's and World Map's "drawn since it last changed" flags on a chunk (those that exist). */
     private static final List<java.lang.reflect.Field> CLEAN_FIELDS = cleanFields("xaero_chunkClean", "xaero_wm_chunkClean");

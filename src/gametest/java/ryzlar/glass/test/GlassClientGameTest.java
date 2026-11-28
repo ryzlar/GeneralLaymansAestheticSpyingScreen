@@ -170,6 +170,11 @@ public class GlassClientGameTest implements FabricClientGameTest
             mapPosts(singleplayer, context, server);
             return;
         }
+        if("journeymap".equals(System.getenv("GLASS_TEST_ONLY")))
+        {
+            journeyMap(singleplayer, context, server);
+            return;
+        }
         server.runCommand("tp @p -58 -60 70 180 5");
         settle(singleplayer, context);
         server.runCommand("setblock -66 -61 50 minecraft:redstone_block");
@@ -377,7 +382,12 @@ public class GlassClientGameTest implements FabricClientGameTest
         check(context.computeOnClient(mc -> {
             net.minecraft.world.item.CreativeModeTabs.tryRebuildTabContents(mc.player.connection.enabledFeatures(), true, mc.level.registryAccess());
             net.minecraft.world.item.CreativeModeTab tab = net.minecraft.core.registries.BuiltInRegistries.CREATIVE_MODE_TAB.getValue(GlassRegistry.TAB);
-            return tab != null && tab.getDisplayItems().size() == 11 && tab.getDisplayItems().iterator().next().is(GlassRegistry.GLASS_TOME);
+            int expected = 11 + (ryzlar.glass.decoy.NanoDecoyFeature.ENABLED ? 1 : 0);
+            if(tab != null && tab.getDisplayItems().size() != expected)
+            {
+                ryzlar.glass.Glass.LOGGER.error("GLASS tab has {} items, expected {}", tab.getDisplayItems().size(), expected);
+            }
+            return tab != null && tab.getDisplayItems().size() == expected && tab.getDisplayItems().iterator().next().is(GlassRegistry.GLASS_TOME);
         }), "GLASS has its own creative tab, the tome first");
         check(context.computeOnClient(mc -> ryzlar.glass.client.tome.TomeRecipes.of(ryzlar.glass.Glass.id("glass_projector")) != null
                 && ryzlar.glass.client.tome.TomeRecipes.of(ryzlar.glass.Glass.id("glass_tome")) != null), "the tome reads the mod's recipes");
@@ -387,7 +397,9 @@ public class GlassClientGameTest implements FabricClientGameTest
                 && screen.page().id().equals("amplifier")), "looking up an item opens its page");
         for(ryzlar.glass.client.tome.TomeBook.Page page : context.computeOnClient(mc -> ryzlar.glass.client.tome.TomeBook.get().pages()))
         {
-            if(!all && !List.of("welcome", "cloak", "holo_cube").contains(page.id()))
+            //GLASS_TOME_PAGE=<id>: only that page's shots.
+            String onlyPage = System.getenv("GLASS_TOME_PAGE");
+            if(onlyPage != null ? !onlyPage.equals(page.id()) : !all && !List.of("welcome", "cloak", "holo_cube").contains(page.id()))
             {
                 continue;
             }
@@ -539,11 +551,8 @@ public class GlassClientGameTest implements FabricClientGameTest
         check(box.contains("-60.0") && box.contains("-50.0"), "the field starts at the ground (-60) and rises 10 blocks (-50): " + box);
     }
 
-    /**
-     * GLASS_TEST_ONLY=mapposts (with Xaero's Minimap and World Map): the field on posts with a dark oak build inside, as
-     * in a real world. Seen from outside on the minimap while it switches on and off, and on the World Map.
-     */
-    private static void mapPosts(TestSingleplayerContext singleplayer, ClientGameTestContext context, TestServerContext server)
+    /** The field on posts three blocks up with a dark oak build inside (see mapPosts). */
+    private static void postsBuild(ClientGameTestContext context, TestServerContext server)
     {
         String id = "generallaymansaestheticspyingscreen:";
         int[][] corners = { { -62, 38 }, { -54, 38 }, { -62, 46 }, { -54, 46 } };
@@ -564,6 +573,68 @@ public class GlassClientGameTest implements FabricClientGameTest
             field.fieldHeight = 10;
             field.sync();
         });
+    }
+
+    /**
+     * GLASS_TEST_ONLY=journeymap (with JourneyMap): the build of mapPosts seen from outside on JourneyMap's minimap (zoomed
+     * in) and full-screen map, while the field is off, on, and off again.
+     */
+    private static void journeyMap(TestSingleplayerContext singleplayer, ClientGameTestContext context, TestServerContext server)
+    {
+        postsBuild(context, server);
+        server.runCommand("tp @p -58 -60 66 180 30");
+        context.waitTicks(100);
+        settle(singleplayer, context);
+        java.util.List<String> keys = context.computeOnClient(mc -> java.util.Arrays.stream(mc.options.keyMappings)
+                .map(net.minecraft.client.KeyMapping::getName).filter(n -> n.contains("journeymap")).toList());
+        LOGGER.info("journeymap keys: {}", keys);
+        java.util.function.Function<String, java.util.function.Function<net.minecraft.client.Options, net.minecraft.client.KeyMapping>> key =
+                part -> options -> java.util.Arrays.stream(options.keyMappings).filter(k -> k.getName().contains("journeymap") && k.getName().contains(part))
+                        .findFirst().orElseThrow(() -> new IllegalStateException("no journeymap key with " + part + " in " + keys));
+        //The first time the full-screen map opens, JourneyMap shows its "about" screen: opened once and closed beforehand.
+        context.getInput().pressKey(key.apply("map_toggle"));
+        context.waitTicks(20);
+        context.runOnClient(mc -> mc.setScreen(null));
+        context.getInput().pressKey(key.apply("zoom_in"));
+        context.waitTicks(100);
+        context.takeScreenshot("jm_off");
+        fullMap(context, key, "jm_full_off");
+        server.runCommand("setblock -66 -61 50 minecraft:redstone_block");
+        for(int t = 0; t <= 40; t += 10)
+        {
+            context.takeScreenshot(String.format("jm_on_t%02d", t));
+            context.waitTicks(10);
+        }
+        context.waitTicks(100);
+        context.takeScreenshot("jm_on");
+        fullMap(context, key, "jm_full_on");
+        server.runCommand("setblock -66 -61 50 minecraft:air");
+        for(int t = 0; t <= 40; t += 10)
+        {
+            context.takeScreenshot(String.format("jm_off_t%02d", t));
+            context.waitTicks(10);
+        }
+        context.waitTicks(100);
+        context.takeScreenshot("jm_off_again");
+        fullMap(context, key, "jm_full_off_again");
+    }
+
+    /** JourneyMap's full-screen map (the field at the top), in a screenshot. */
+    private static void fullMap(ClientGameTestContext context, java.util.function.Function<String, java.util.function.Function<net.minecraft.client.Options, net.minecraft.client.KeyMapping>> key, String name)
+    {
+        context.getInput().pressKey(key.apply("map_toggle"));
+        context.waitTicks(60);
+        context.takeScreenshot(name);
+        context.runOnClient(mc -> mc.setScreen(null));
+    }
+
+    /**
+     * GLASS_TEST_ONLY=mapposts (with Xaero's Minimap and World Map): the field on posts with a dark oak build inside, as
+     * in a real world. Seen from outside on the minimap while it switches on and off, and on the World Map.
+     */
+    private static void mapPosts(TestSingleplayerContext singleplayer, ClientGameTestContext context, TestServerContext server)
+    {
+        postsBuild(context, server);
         server.runCommand("tp @p -58 -60 66 180 30");
         context.waitTicks(100);
         settle(singleplayer, context);
@@ -830,6 +901,212 @@ public class GlassClientGameTest implements FabricClientGameTest
         context.takeScreenshot("minimap_off_again");
     }
 
+    /**
+     * GLASS_TEST_ONLY=decoy: the Nano Decoy in the hand and in the inventory, then thrown: it lands, its figure builds
+     * up, draws two husks (no zombies: they burn at noon) and a creeper (which does not blow up), glitches when hit, stands where it was projected and collapses.
+     */
+    private static void decoy(TestSingleplayerContext singleplayer, ClientGameTestContext context, TestServerContext server)
+    {
+        if(!ryzlar.glass.decoy.NanoDecoyFeature.ENABLED)
+        {
+            LOGGER.info("Nano Decoy switched off (NanoDecoyFeature): its test is skipped");
+            return;
+        }
+        server.runCommand("tp @p 0 -60 0 0 20");
+        server.runCommand("clear @p");
+        server.runCommand("give @p generallaymansaestheticspyingscreen:nano_decoy 4");
+        settle(singleplayer, context);
+        context.waitTicks(20);
+        context.takeScreenshot("decoy_hand");
+        context.runOnClient(mc -> mc.setScreen(new net.minecraft.client.gui.screens.inventory.InventoryScreen(mc.player)));
+        context.waitTicks(5);
+        context.takeScreenshot("decoy_inventory");
+        context.runOnClient(mc -> mc.setScreen(null));
+        context.waitTicks(5);
+        server.runOnServer(s -> {
+            ServerPlayer player = player(s);
+            ryzlar.glass.decoy.NanoDecoy.NANO_DECOY.use(s.overworld(), player, net.minecraft.world.InteractionHand.MAIN_HAND);
+        });
+        context.waitTicks(2);
+        int left = context.computeOnClient(mc -> mc.player.getMainHandItem().getCount());
+        check(left == 3, "one decoy used up (3 left): " + left);
+        boolean waiting = context.computeOnClient(mc -> mc.player.getCooldowns().isOnCooldown(mc.player.getMainHandItem()));
+        check(waiting, "the next decoy waits for its cooldown");
+        for(int t = 0; t <= 9; t += 3)
+        {
+            context.takeScreenshot(String.format("decoy_fly_t%02d", t));
+            context.waitTicks(3);
+        }
+        //It lands and its lens pops up; then the figure builds up from the feet. Seen from the side, a little ahead.
+        Vec3 at = context.computeOnClient(mc -> mc.level.getEntitiesOfClass(ryzlar.glass.decoy.NanoDecoyBall.class,
+                mc.player.getBoundingBox().inflate(40D)).stream().findFirst().map(net.minecraft.world.entity.Entity::position).orElse(Vec3.ZERO));
+        LOGGER.info("decoy landed at {}", at);
+        lookFrom(server, at.add(3.5D, 1.6D, 4.5D), at.add(0D, 0.9D, 1D));
+        for(int t = 0; t <= 28; t += 4)
+        {
+            context.takeScreenshot(String.format("decoy_build_t%02d", t));
+            context.waitTicks(4);
+        }
+        //Monsters near it go for it, not for the player; a creeper reaches it and does not blow up.
+        server.runCommand(String.format(java.util.Locale.ROOT, "summon minecraft:husk %.1f %.1f %.1f", at.x - 8D, at.y, at.z + 2D));
+        server.runCommand(String.format(java.util.Locale.ROOT, "summon minecraft:husk %.1f %.1f %.1f", at.x + 8D, at.y, at.z + 4D));
+        server.runCommand(String.format(java.util.Locale.ROOT, "summon minecraft:creeper %.1f %.1f %.1f", at.x + 6D, at.y, at.z + 8D));
+        //A calm enderman (a neutral mob) is left alone: it would go for the decoy only if it were angry at the player.
+        server.runCommand(String.format(java.util.Locale.ROOT, "summon minecraft:enderman %.1f %.1f %.1f {NoAI:1b}", at.x - 5D, at.y, at.z - 5D));
+        context.waitTicks(50);
+        Vec3 figure = figureAt(context);
+        lookFrom(server, figure.add(4D, 1.6D, 4D), figure.add(0D, 0.9D, 0D));
+        context.waitTicks(3);
+        context.takeScreenshot("decoy_lure");
+        long lured = server.computeOnServer(s -> s.overworld().getEntitiesOfClass(net.minecraft.world.entity.Mob.class,
+                player(s).getBoundingBox().inflate(40D)).stream().filter(m -> m.getTarget() instanceof ryzlar.glass.decoy.NanoDecoyFigure).count());
+        check(lured == 3, "both husks and the creeper go for the decoy, the calm enderman does not: " + lured);
+        //Hit, it glitches and drops a few cubes, but stays.
+        server.runCommand("damage @e[type=generallaymansaestheticspyingscreen:nano_decoy_figure,limit=1] 1 minecraft:player_attack");
+        context.waitTicks(2);
+        context.takeScreenshot("decoy_hit_t02");
+        context.waitTicks(6);
+        context.takeScreenshot("decoy_hit_t08");
+        context.waitTicks(40);
+        figure = figureAt(context);
+        lookFrom(server, figure.add(-3.5D, 1.6D, 3.5D), figure.add(0D, 0.9D, 0D));
+        context.waitTicks(3);
+        context.takeScreenshot("decoy_stand");
+        double moved = figure.distanceTo(at);
+        check(moved < 0.5D, "the decoy stands where it was projected: moved " + moved);
+        boolean creeper = server.computeOnServer(s -> !s.overworld().getEntitiesOfClass(net.minecraft.world.entity.monster.Creeper.class,
+                player(s).getBoundingBox().inflate(40D)).isEmpty());
+        check(creeper, "the creeper did not blow up at the decoy");
+        //Then it collapses from the head down, and the canister fizzles out.
+        long born = server.computeOnServer(s -> s.overworld().getEntitiesOfClass(ryzlar.glass.decoy.NanoDecoyFigure.class,
+                player(s).getBoundingBox().inflate(60D)).stream().findFirst().map(f -> (long)f.age(0F)).orElse(-1L));
+        LOGGER.info("decoy figure age {}", born);
+        context.waitTicks((int)Math.max(0L, ryzlar.glass.decoy.NanoDecoyFigure.BUILD_TICKS + ryzlar.glass.decoy.NanoDecoyFigure.LIFE_TICKS - born - 6));
+        figure = figureAt(context);
+        lookFrom(server, figure.add(3.5D, 1.6D, 3.5D), figure.add(0D, 0.9D, 0D));
+        for(int t = 0; t <= 52; t += 4)
+        {
+            context.takeScreenshot(String.format("decoy_end_t%02d", t));
+            context.waitTicks(4);
+        }
+        context.waitTicks(20);
+        long still = server.computeOnServer(s -> s.overworld().getEntitiesOfClass(net.minecraft.world.entity.Mob.class,
+                player(s).getBoundingBox().inflate(60D)).stream().filter(m -> m.getTarget() instanceof ryzlar.glass.decoy.NanoDecoyFigure).count());
+        check(still == 0, "no mob still goes for the decoy once it is gone: " + still);
+        boolean gone = context.computeOnClient(mc -> mc.level.getEntitiesOfClass(ryzlar.glass.decoy.NanoDecoyBall.class,
+                mc.player.getBoundingBox().inflate(60D)).isEmpty() && mc.level.getEntitiesOfClass(ryzlar.glass.decoy.NanoDecoyFigure.class,
+                mc.player.getBoundingBox().inflate(60D)).isEmpty());
+        check(gone, "the decoy is gone after it fizzled out");
+    }
+
+    /** Where the decoy's figure is now (seen by the client). */
+    private static Vec3 figureAt(ClientGameTestContext context)
+    {
+        return context.computeOnClient(mc -> mc.level.getEntitiesOfClass(ryzlar.glass.decoy.NanoDecoyFigure.class,
+                mc.player.getBoundingBox().inflate(60D)).stream().findFirst().map(net.minecraft.world.entity.Entity::position).orElse(Vec3.ZERO));
+    }
+
+    /** Puts the player's eyes at {@code eye}, looking at {@code target}. */
+    private static void lookFrom(TestServerContext server, Vec3 eye, Vec3 target)
+    {
+        Vec3 d = target.subtract(eye);
+        float yaw = (float)Math.toDegrees(Math.atan2(-d.x, d.z));
+        float pitch = (float)Math.toDegrees(-Math.atan2(d.y, Math.hypot(d.x, d.z)));
+        server.runCommand(String.format(java.util.Locale.ROOT, "tp @p %.2f %.2f %.2f %.1f %.1f", eye.x, eye.y - 1.62D, eye.z, yaw, pitch));
+    }
+
+    /**
+     * GLASS_TEST_ONLY=glasswall: the user's build, block for block (read from their world): a cloak on a 4x3 wall of
+     * normal extensions, the projector in its bottom west corner switched on by a lever, stone right behind it, gold
+     * behind that and a gold wall further back. Seen from where they saw a wedge of sky in it: from the east, the eye
+     * inside the wall's thickness, looking along it at its narrow end, then from around there.
+     */
+    private static void glassWall(TestSingleplayerContext singleplayer, ClientGameTestContext context, TestServerContext server)
+    {
+        server.runCommand("fill 60 -61 20 110 -61 60 minecraft:grass_block");
+        server.runCommand("fill 60 -60 20 110 -50 60 minecraft:air");
+        server.runCommand("fill 79 -60 37 84 -57 37 minecraft:gold_block");
+        server.runCommand("fill 80 -60 39 83 -58 39 minecraft:gold_block");
+        server.runCommand("fill 80 -60 40 83 -58 40 minecraft:stone");
+        server.runCommand("fill 80 -60 41 83 -58 41 generallaymansaestheticspyingscreen:glass_extension");
+        server.runCommand("setblock 80 -60 41 generallaymansaestheticspyingscreen:glass_projector{placingFace:\"south\"}");
+        context.waitTicks(2);
+        BlockPos projectorPos = new BlockPos(80, -60, 41);
+        server.runOnServer(s -> {
+            GlassProjectorBlockEntity projector = (GlassProjectorBlockEntity)s.overworld().getBlockEntity(projectorPos);
+            projector.cloak = true;
+            projector.sync();
+        });
+        server.runCommand("gamemode spectator @p");
+        server.runCommand("tp @p 81.5 -59 50 180 5");
+        settle(singleplayer, context);
+        server.runCommand("setblock 80 -60 42 minecraft:lever[face=wall,facing=south,powered=true]");
+        context.waitTicks(80);
+        context.takeScreenshot("glasswall_front");
+        //Their spot (feet x, y, z, yaw, pitch from F3), then round it.
+        double[][] views = {
+                { 86.582, -58.21079, 41.267, 86.2, 8.1 },
+                { 86.582, -58.21079, 41.6, 86.2, 8.1 },
+                { 86.582, -58.21079, 41.9, 86.2, 8.1 },
+                { 86.582, -58.21079, 42.3, 86.2, 8.1 },
+                { 90.0, -58.2, 41.5, 90, 5 },
+                { 85.2, -59.0, 41.5, 88, 15 },
+                { 76.4, -58.2, 41.5, 270, 8 },
+        };
+        for(int i = 0; i < views.length; i++)
+        {
+            double[] v = views[i];
+            server.runCommand(String.format(java.util.Locale.ROOT, "tp @p %.3f %.5f %.3f %.1f %.1f", v[0], v[1], v[2], v[3], v[4]));
+            context.waitTicks(20);
+            context.takeScreenshot(String.format("glasswall_side_%d", i));
+        }
+    }
+
+    /**
+     * GLASS_TEST_ONLY=culling (with -PwithEntityCulling): a camera looks into a stone booth with a cow in it, which the
+     * player cannot see (the booth's walls are in the way); the screen in front of the player must still show the cow.
+     * Entity Culling works out what to skip from the player's own eye, and skipped the cow in the screen's view too.
+     */
+    private static void culling(TestSingleplayerContext singleplayer, ClientGameTestContext context, TestServerContext server)
+    {
+        server.runCommand("fill -10 -61 -20 50 -61 20 minecraft:grass_block");
+        server.runCommand("fill -10 -60 -20 50 -50 20 minecraft:air");
+        //The booth, open to the south only, round a cow that stands still.
+        server.runCommand("fill 37 -60 -9 43 -56 -3 minecraft:stone hollow");
+        server.runCommand("fill 39 -60 -3 41 -58 -3 minecraft:air");
+        server.runCommand("summon minecraft:cow 40.5 -60 -6.5 {NoAI:1b,Rotation:[0f,0f]}");
+        server.runCommand("setblock 40 -59 2 generallaymansaestheticspyingscreen:glass_terminal{facing:\"north\"}");
+        context.waitTicks(2);
+        BlockPos camera = new BlockPos(40, -59, 2);
+        String channel = server.computeOnServer(s -> create(s, camera, "Booth", "booth123"));
+        server.runCommand("fill -3 -60 0 3 -56 0 generallaymansaestheticspyingscreen:glass_extension");
+        server.runCommand("setblock 0 -58 0 generallaymansaestheticspyingscreen:glass_projector{placingFace:\"south\"}");
+        context.waitTicks(2);
+        server.runOnServer(s -> tune(s, new BlockPos(0, -58, 0), channel));
+        server.runCommand("tp @p 0.5 -60 8.5 180 0");
+        settle(singleplayer, context);
+        server.runCommand("setblock 0 -58 -1 minecraft:redstone_block");
+        context.waitTicks(80);
+        context.takeScreenshot("culling_screen");
+        //Does Entity Culling hold the cow hidden from the player (else this test shows nothing)?
+        String culled = context.computeOnClient(mc -> mc.level.getEntitiesOfClass(net.minecraft.world.entity.animal.Cow.class,
+                mc.player.getBoundingBox().inflate(80D)).stream().findFirst().map(cow -> {
+                    try
+                    {
+                        return String.valueOf(cow.getClass().getMethod("isCulled").invoke(cow));
+                    }
+                    catch(ReflectiveOperationException e)
+                    {
+                        return "no Entity Culling";
+                    }
+                }).orElse("no cow"));
+        LOGGER.info("culling: the cow is culled for the player: {}", culled);
+        //Seen through the booth's opening, for comparison.
+        server.runCommand("tp @p 40.5 -59 4 180 5");
+        context.waitTicks(30);
+        context.takeScreenshot("culling_direct");
+    }
+
     /** Makes a channel at the terminal at {@code pos}, like the camera screen does. Returns its id. */
     private static String create(MinecraftServer server, BlockPos pos, String name, String password)
     {
@@ -876,6 +1153,21 @@ public class GlassClientGameTest implements FabricClientGameTest
             server.runCommand("gamerule doDaylightCycle false");
             server.runCommand("gamerule doWeatherCycle false");
             server.runCommand("weather clear");
+            if("culling".equals(System.getenv("GLASS_TEST_ONLY")))
+            {
+                culling(singleplayer, context, server);
+                return;
+            }
+            if("glasswall".equals(System.getenv("GLASS_TEST_ONLY")))
+            {
+                glassWall(singleplayer, context, server);
+                return;
+            }
+            if("decoy".equals(System.getenv("GLASS_TEST_ONLY")))
+            {
+                decoy(singleplayer, context, server);
+                return;
+            }
             //GLASS_TEST_ONLY=cloak: only the cloak field, looked at from many sides (quick, to chase a cloak bug).
             //GLASS_TEST_ONLY=cloakshaders: the same, as with a shader pack on (no views), filming it switching on and off.
             if("cloakshaders".equals(System.getenv("GLASS_TEST_ONLY")))
@@ -888,7 +1180,7 @@ public class GlassClientGameTest implements FabricClientGameTest
                     || "minimap".equals(System.getenv("GLASS_TEST_ONLY")) || "fieldwalk".equals(System.getenv("GLASS_TEST_ONLY"))
                     || "screens".equals(System.getenv("GLASS_TEST_ONLY")) || "fieldposts".equals(System.getenv("GLASS_TEST_ONLY"))
                     || "worldmap".equals(System.getenv("GLASS_TEST_ONLY")) || "mapposts".equals(System.getenv("GLASS_TEST_ONLY"))
-                    || "userbuild".equals(System.getenv("GLASS_TEST_ONLY")))
+                    || "userbuild".equals(System.getenv("GLASS_TEST_ONLY")) || "journeymap".equals(System.getenv("GLASS_TEST_ONLY")))
             {
                 cloakOnly(singleplayer, context, server);
                 return;
