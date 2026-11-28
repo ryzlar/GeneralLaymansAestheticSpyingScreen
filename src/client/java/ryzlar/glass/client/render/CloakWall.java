@@ -197,7 +197,8 @@ public final class CloakWall
             AABB faces = box.inflate(0.05D);
             for(Direction face : Direction.values())
             {
-                if(facesCamera(faces, face))
+                //No underside: a field has walls and a roof, not a floor (cut from below, it opened holes in the ground).
+                if(face != Direction.DOWN && facesCamera(faces, face))
                 {
                     cutFace(builder, faces, face, box);
                 }

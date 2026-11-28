@@ -451,7 +451,7 @@ public class GlassBlockEntityRenderer implements BlockEntityRenderer<GlassBaseBl
                 //Seen from inside: its back (ScreenBack), as far up as the wall has risen (or, switching off, has sunk back
                 //to); the roof while it is closed. Only from right inside the field: from outside, the far walls' insides
                 //showed through the near walls.
-                if(box.contains(eye))
+                if(box.contains(eye) || underField(box, eye))
                 {
                     drawFieldBack(key, side, x0, x1, y0, y1, z0, z1, Math.min(rise, height + 0.01F), rise >= full, origin, pose, buffers, partialTick);
                 }
@@ -535,6 +535,18 @@ public class GlassBlockEntityRenderer implements BlockEntityRenderer<GlassBaseBl
     }
 
     /** The inside of one side of a cloak field (corners from the projector's centre). */
+    /** How far below a field its inside still shows (its walls' backs and roof, through the missing floor), in blocks. */
+    private static final double UNDER_FIELD_ZONE = 10D;
+
+    /**
+     * Whether the eye is under a field, at most {@link #UNDER_FIELD_ZONE} blocks below its bottom: from there its inside
+     * shows as from inside it (where the ground hides the walls, the depth test leaves them out).
+     */
+    static boolean underField(net.minecraft.world.phys.AABB box, Vec3 eye)
+    {
+        return eye.y < box.minY && eye.y >= box.minY - UNDER_FIELD_ZONE && eye.x > box.minX && eye.x < box.maxX && eye.z > box.minZ && eye.z < box.maxZ;
+    }
+
     private static void drawFieldBack(String key, Direction side, float x0, float x1, float y0, float y1, float z0, float z1, float risen, boolean closed,
                                       BlockPos origin, PoseStack.Pose pose, MultiBufferSource buffers, float partialTick)
     {
