@@ -1053,6 +1053,51 @@ public class GlassClientGameTest implements FabricClientGameTest
         }
     }
 
+    /**
+     * GLASS_TEST_ONLY=culling (with -PwithEntityCulling): a camera looks into a stone booth with a cow in it, which the
+     * player cannot see (the booth's walls are in the way); the screen in front of the player must still show the cow.
+     * Entity Culling works out what to skip from the player's own eye, and skipped the cow in the screen's view too.
+     */
+    private static void culling(TestSingleplayerContext singleplayer, ClientGameTestContext context, TestServerContext server)
+    {
+        server.runCommand("fill -10 -61 -20 50 -61 20 minecraft:grass_block");
+        server.runCommand("fill -10 -60 -20 50 -50 20 minecraft:air");
+        //The booth, open to the south only, round a cow that stands still.
+        server.runCommand("fill 37 -60 -9 43 -56 -3 minecraft:stone hollow");
+        server.runCommand("fill 39 -60 -3 41 -58 -3 minecraft:air");
+        server.runCommand("summon minecraft:cow 40.5 -60 -6.5 {NoAI:1b,Rotation:[0f,0f]}");
+        server.runCommand("setblock 40 -59 2 generallaymansaestheticspyingscreen:glass_terminal{facing:\"north\"}");
+        context.waitTicks(2);
+        BlockPos camera = new BlockPos(40, -59, 2);
+        String channel = server.computeOnServer(s -> create(s, camera, "Booth", "booth123"));
+        server.runCommand("fill -3 -60 0 3 -56 0 generallaymansaestheticspyingscreen:glass_extension");
+        server.runCommand("setblock 0 -58 0 generallaymansaestheticspyingscreen:glass_projector{placingFace:\"south\"}");
+        context.waitTicks(2);
+        server.runOnServer(s -> tune(s, new BlockPos(0, -58, 0), channel));
+        server.runCommand("tp @p 0.5 -60 8.5 180 0");
+        settle(singleplayer, context);
+        server.runCommand("setblock 0 -58 -1 minecraft:redstone_block");
+        context.waitTicks(80);
+        context.takeScreenshot("culling_screen");
+        //Does Entity Culling hold the cow hidden from the player (else this test shows nothing)?
+        String culled = context.computeOnClient(mc -> mc.level.getEntitiesOfClass(net.minecraft.world.entity.animal.Cow.class,
+                mc.player.getBoundingBox().inflate(80D)).stream().findFirst().map(cow -> {
+                    try
+                    {
+                        return String.valueOf(cow.getClass().getMethod("isCulled").invoke(cow));
+                    }
+                    catch(ReflectiveOperationException e)
+                    {
+                        return "no Entity Culling";
+                    }
+                }).orElse("no cow"));
+        LOGGER.info("culling: the cow is culled for the player: {}", culled);
+        //Seen through the booth's opening, for comparison.
+        server.runCommand("tp @p 40.5 -59 4 180 5");
+        context.waitTicks(30);
+        context.takeScreenshot("culling_direct");
+    }
+
     /** Makes a channel at the terminal at {@code pos}, like the camera screen does. Returns its id. */
     private static String create(MinecraftServer server, BlockPos pos, String name, String password)
     {
@@ -1099,6 +1144,11 @@ public class GlassClientGameTest implements FabricClientGameTest
             server.runCommand("gamerule doDaylightCycle false");
             server.runCommand("gamerule doWeatherCycle false");
             server.runCommand("weather clear");
+            if("culling".equals(System.getenv("GLASS_TEST_ONLY")))
+            {
+                culling(singleplayer, context, server);
+                return;
+            }
             if("glasswall".equals(System.getenv("GLASS_TEST_ONLY")))
             {
                 glassWall(singleplayer, context, server);

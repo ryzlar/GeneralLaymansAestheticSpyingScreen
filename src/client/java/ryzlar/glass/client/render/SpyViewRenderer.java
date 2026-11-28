@@ -473,17 +473,26 @@ public final class SpyViewRenderer
         {
             toRender = toRender.subList(0, MAX_VIEWS_PER_FRAME);
         }
-        for(SpyView view : toRender)
+        //Entity Culling's choices are made from the player's eye: a view sees from elsewhere (see EntityCullingCompat).
+        ryzlar.glass.client.EntityCullingCompat.pause();
+        try
         {
-            try
+            for(SpyView view : toRender)
             {
-                render(mc, gameRenderer, mainCamera, deltaTracker, view, mainProjection);
+                try
+                {
+                    render(mc, gameRenderer, mainCamera, deltaTracker, view, mainProjection);
+                }
+                catch(RuntimeException e)
+                {
+                    Glass.LOGGER.error("Failed to render the view for GLASS channel {}", view.channel, e);
+                    view.rendered = false;
+                }
             }
-            catch(RuntimeException e)
-            {
-                Glass.LOGGER.error("Failed to render the view for GLASS channel {}", view.channel, e);
-                view.rendered = false;
-            }
+        }
+        finally
+        {
+            ryzlar.glass.client.EntityCullingCompat.resume();
         }
     }
 
